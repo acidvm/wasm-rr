@@ -374,7 +374,7 @@ fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
 fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> Result<T>
 where
     P: AsRef<Path>,
-    T: WasiView + clocks::wall_clock::Host + 'static,
+    T: WasiView + clocks::wall_clock::Host + cli::environment::Host + 'static,
 {
     let wasm_path = wasm_path.as_ref();
 
@@ -417,7 +417,7 @@ where
 
 fn configure_engine_and_linker<T>() -> Result<(Engine, Linker<T>)>
 where
-    T: WasiView + clocks::wall_clock::Host + 'static,
+    T: WasiView + clocks::wall_clock::Host + cli::environment::Host + 'static,
 {
     // Create an engine with the component model enabled and a component linker.
     let mut config = Config::new();
@@ -432,7 +432,7 @@ where
     sync::io::error::add_to_linker::<T, HasIo>(&mut linker, |t| t.ctx().table)
         .context("failed to add wasi:io/error")?;
     // CLI
-    cli::environment::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
+    cli::environment::add_to_linker::<T, WallClock<T>>(&mut linker, |t| t)
         .context("failed to add wasi:cli/environment")?;
     cli::stdin::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
         .context("failed to add wasi:cli/stdin")?;
