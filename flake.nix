@@ -21,6 +21,7 @@
           inherit system;
           overlays = [(import rust-overlay)];
         };
+        lib = pkgs.lib;
 
         rustWithWasmTarget = (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml).override {
           targets = ["wasm32-wasip2"];
@@ -61,10 +62,20 @@
         packages =
           packagesForExamples
           // {
-            default = pkgs.linkFarmFromDrvs "wasm-examples" (map (
-                example: self.packages.${system}."${example}-wasm"
-              )
-              examples);
+            default = pkgs.runCommand "wasm-examples" {} ''
+              mkdir -p $out
+              ${lib.concatStringsSep "\n" (
+                map
+                (
+                  example: let
+                    src = self.packages.${system}."${example}-wasm";
+                  in ''
+                    cp ${src}/${example}.wasm $out/${example}.wasm
+                  ''
+                )
+                examples
+              )}
+            '';
           };
       }
     );
