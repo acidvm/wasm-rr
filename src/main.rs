@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
-use std::mem;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use wasmtime::component::{Component, HasData, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
@@ -27,8 +27,16 @@ enum Command {
         /// Path to the component to execute
         wasm: PathBuf,
         /// Output file for the trace JSON
-        #[arg(default_value = "wasm-rr-trace.json")]
+        #[arg(
+            short = 't',
+            long = "trace",
+            value_name = "TRACE",
+            default_value = "wasm-rr-trace.json"
+        )]
         trace: PathBuf,
+        /// Arguments to forward to the component (use `--` to separate)
+        #[arg(value_name = "ARGS", num_args = 0.., trailing_var_arg = true)]
+        args: Vec<String>,
     },
     /// Replay previously recorded clock values from a trace file
     Replay {
@@ -44,25 +52,24 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Record { wasm, trace } => record(wasm.as_path(), trace.as_path()),
+        Command::Record { wasm, trace, args } => record(wasm.as_path(), trace.as_path(), &args),
         Command::Replay { wasm, trace } => replay(wasm.as_path(), trace.as_path()),
     }
 }
 
-fn record(wasm: &Path, trace: &Path) -> Result<()> {
-    let mode = Mode::Record(Recorder::new(trace.to_path_buf()));
-    match run_wasm_with_wasi(wasm, mode)? {
-        Mode::Record(recorder) => recorder.save(),
-        _ => unreachable!("mode changed during record"),
-    }
+fn record(wasm: &Path, trace: &Path, args: &[String]) -> Result<()> {
+    let wasi = build_wasi_ctx(wasm, args);
+    let ctx = CtxRecorder::new(wasi, Recorder::new(trace.to_path_buf()));
+    let ctx = run_wasm_with_wasi(wasm, ctx)?;
+    ctx.into_recorder().save()
 }
 
 fn replay(wasm: &Path, trace: &Path) -> Result<()> {
     let playback = Playback::from_file(trace)?;
-    match run_wasm_with_wasi(wasm, Mode::Replay(playback))? {
-        Mode::Replay(playback) => playback.finish(),
-        _ => unreachable!("mode changed during replay"),
-    }
+    let wasi = build_wasi_ctx(wasm, &[]);
+    let ctx = CtxPlayback::new(wasi, playback);
+    let ctx = run_wasm_with_wasi(wasm, ctx)?;
+    ctx.into_playback().finish()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -178,19 +185,27 @@ impl Playback {
     }
 }
 
-enum Mode {
-    Record(Recorder),
-    Replay(Playback),
-    Passthrough,
-}
-
-struct Ctx {
+struct CtxRecorder {
     table: ResourceTable,
     wasi: WasiCtx,
-    mode: Mode,
+    recorder: Recorder,
 }
 
-impl WasiView for Ctx {
+impl CtxRecorder {
+    fn new(wasi: WasiCtx, recorder: Recorder) -> Self {
+        Self {
+            table: ResourceTable::new(),
+            wasi,
+            recorder,
+        }
+    }
+
+    fn into_recorder(self) -> Recorder {
+        self.recorder
+    }
+}
+
+impl WasiView for CtxRecorder {
     fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
             ctx: &mut self.wasi,
@@ -199,61 +214,64 @@ impl WasiView for Ctx {
     }
 }
 
-impl clocks::wall_clock::Host for Ctx {
+impl clocks::wall_clock::Host for CtxRecorder {
     fn now(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        let mode = mem::replace(&mut self.mode, Mode::Passthrough);
-
-        let result = match mode {
-            Mode::Record(mut recorder) => {
-                let now = self.clocks().now()?;
-                recorder.record_now(&now);
-                self.mode = Mode::Record(recorder);
-                Ok(now)
-            }
-            Mode::Replay(mut playback) => {
-                let value = playback.next_now();
-                self.mode = Mode::Replay(playback);
-                value
-            }
-            Mode::Passthrough => {
-                let now = self.clocks().now();
-                self.mode = Mode::Passthrough;
-                now
-            }
-        };
-
-        result
+        let now = self.clocks().now()?;
+        self.recorder.record_now(&now);
+        Ok(now)
     }
 
     fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        let mode = mem::replace(&mut self.mode, Mode::Passthrough);
-
-        let result = match mode {
-            Mode::Record(mut recorder) => {
-                let resolution = self.clocks().resolution()?;
-                recorder.record_resolution(&resolution);
-                self.mode = Mode::Record(recorder);
-                Ok(resolution)
-            }
-            Mode::Replay(mut playback) => {
-                let value = playback.next_resolution();
-                self.mode = Mode::Replay(playback);
-                value
-            }
-            Mode::Passthrough => {
-                let resolution = self.clocks().resolution();
-                self.mode = Mode::Passthrough;
-                resolution
-            }
-        };
-
-        result
+        let resolution = self.clocks().resolution()?;
+        self.recorder.record_resolution(&resolution);
+        Ok(resolution)
     }
 }
 
-struct WallClock;
+struct CtxPlayback {
+    table: ResourceTable,
+    wasi: WasiCtx,
+    playback: Playback,
+}
 
-impl HasData for WallClock {
+impl CtxPlayback {
+    fn new(wasi: WasiCtx, playback: Playback) -> Self {
+        Self {
+            table: ResourceTable::new(),
+            wasi,
+            playback,
+        }
+    }
+
+    fn into_playback(self) -> Playback {
+        self.playback
+    }
+}
+
+impl WasiView for CtxPlayback {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
+    }
+}
+
+impl clocks::wall_clock::Host for CtxPlayback {
+    fn now(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
+        self.playback.next_now()
+    }
+
+    fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
+        self.playback.next_resolution()
+    }
+}
+
+struct WallClock<Ctx> {
+    _marker: PhantomData<Ctx>,
+}
+
+impl<Ctx: 'static> HasData for WallClock<Ctx> {
     type Data<'a> = &'a mut Ctx;
 }
 
@@ -263,61 +281,32 @@ impl HasData for HasIo {
     type Data<'a> = &'a mut ResourceTable;
 }
 
-fn run_wasm_with_wasi<P: AsRef<Path>>(wasm_path: P, mode: Mode) -> Result<Mode> {
+fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
+    let mut builder = WasiCtxBuilder::new();
+    builder.inherit_stdio();
+
+    let program_name = wasm_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("component");
+    builder.arg(program_name);
+    for arg in args {
+        builder.arg(arg);
+    }
+
+    builder.build()
+}
+
+fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> Result<T>
+where
+    P: AsRef<Path>,
+    T: WasiView + clocks::wall_clock::Host + 'static,
+{
     let wasm_path = wasm_path.as_ref();
 
-    // Create an engine with the component model enabled and a component linker.
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-    let engine = Engine::new(&config).context("failed to create engine with component model")?;
-    let mut linker: Linker<Ctx> = Linker::new(&engine);
+    let (engine, linker) = configure_engine_and_linker::<T>()?;
 
-    // Build a minimal WASI context that inherits stdio from the host.
-    let mut wasi_ctx_builder = WasiCtxBuilder::new();
-    wasi_ctx_builder.inherit_stdio();
-    let wasi_ctx = wasi_ctx_builder.build();
-
-    // Wire required WASI Preview2 imports explicitly, with custom clocks.
-    // I/O
-    sync::io::streams::add_to_linker::<Ctx, HasIo>(&mut linker, |t| t.ctx().table)
-        .context("failed to add wasi:io/streams")?;
-    sync::io::error::add_to_linker::<Ctx, HasIo>(&mut linker, |t| t.ctx().table)
-        .context("failed to add wasi:io/error")?;
-    // CLI
-    cli::environment::add_to_linker::<Ctx, WasiCli>(&mut linker, Ctx::cli)
-        .context("failed to add wasi:cli/environment")?;
-    cli::stdin::add_to_linker::<Ctx, WasiCli>(&mut linker, Ctx::cli)
-        .context("failed to add wasi:cli/stdin")?;
-    cli::stdout::add_to_linker::<Ctx, WasiCli>(&mut linker, Ctx::cli)
-        .context("failed to add wasi:cli/stdout")?;
-    cli::stderr::add_to_linker::<Ctx, WasiCli>(&mut linker, Ctx::cli)
-        .context("failed to add wasi:cli/stderr")?;
-    cli::exit::add_to_linker::<Ctx, WasiCli>(
-        &mut linker,
-        &wasmtime_wasi::p2::bindings::sync::LinkOptions::default().into(),
-        Ctx::cli,
-    )
-    .context("failed to add wasi:cli/exit")?;
-
-    // Filesystem (types + preopens)
-    sync::filesystem::types::add_to_linker::<Ctx, WasiFilesystem>(&mut linker, Ctx::filesystem)
-        .context("failed to add wasi:filesystem/types")?;
-    sync::filesystem::preopens::add_to_linker::<Ctx, WasiFilesystem>(&mut linker, Ctx::filesystem)
-        .context("failed to add wasi:filesystem/preopens")?;
-    // Clocks (custom host implementation)
-    clocks::wall_clock::add_to_linker::<Ctx, WallClock>(&mut linker, |s: &mut Ctx| s)
-        .context("failed to add wasi:clocks/wall-clock")?;
-    clocks::monotonic_clock::add_to_linker::<Ctx, WasiClocks>(&mut linker, Ctx::clocks)
-        .context("failed to add wasi:clocks/monotonic-clock")?;
-
-    let mut store = Store::new(
-        &engine,
-        Ctx {
-            table: ResourceTable::new(),
-            wasi: wasi_ctx,
-            mode,
-        },
-    );
+    let mut store = Store::new(&engine, ctx);
 
     // Compile and instantiate the component.
     let component = Component::from_file(&engine, wasm_path)
@@ -349,8 +338,51 @@ fn run_wasm_with_wasi<P: AsRef<Path>>(wasm_path: P, mode: Mode) -> Result<Mode> 
     typed.post_return(&mut store)?;
     result.map_err(|_| anyhow::anyhow!("error"))?;
 
-    let Ctx {
-        mode: store_mode, ..
-    } = store.into_data();
-    Ok(store_mode)
+    Ok(store.into_data())
+}
+
+fn configure_engine_and_linker<T>() -> Result<(Engine, Linker<T>)>
+where
+    T: WasiView + clocks::wall_clock::Host + 'static,
+{
+    // Create an engine with the component model enabled and a component linker.
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    let engine = Engine::new(&config).context("failed to create engine with component model")?;
+    let mut linker: Linker<T> = Linker::new(&engine);
+
+    // Wire required WASI Preview2 imports explicitly, with custom clocks.
+    // I/O
+    sync::io::streams::add_to_linker::<T, HasIo>(&mut linker, |t| t.ctx().table)
+        .context("failed to add wasi:io/streams")?;
+    sync::io::error::add_to_linker::<T, HasIo>(&mut linker, |t| t.ctx().table)
+        .context("failed to add wasi:io/error")?;
+    // CLI
+    cli::environment::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
+        .context("failed to add wasi:cli/environment")?;
+    cli::stdin::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
+        .context("failed to add wasi:cli/stdin")?;
+    cli::stdout::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
+        .context("failed to add wasi:cli/stdout")?;
+    cli::stderr::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
+        .context("failed to add wasi:cli/stderr")?;
+    cli::exit::add_to_linker::<T, WasiCli>(
+        &mut linker,
+        &wasmtime_wasi::p2::bindings::sync::LinkOptions::default().into(),
+        |t| t.cli(),
+    )
+    .context("failed to add wasi:cli/exit")?;
+
+    // Filesystem (types + preopens)
+    sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(&mut linker, |t| t.filesystem())
+        .context("failed to add wasi:filesystem/types")?;
+    sync::filesystem::preopens::add_to_linker::<T, WasiFilesystem>(&mut linker, |t| t.filesystem())
+        .context("failed to add wasi:filesystem/preopens")?;
+    // Clocks (custom host implementation)
+    clocks::wall_clock::add_to_linker::<T, WallClock<T>>(&mut linker, |s| s)
+        .context("failed to add wasi:clocks/wall-clock")?;
+    clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(&mut linker, |t| t.clocks())
+        .context("failed to add wasi:clocks/monotonic-clock")?;
+
+    Ok((engine, linker))
 }

@@ -1,5 +1,5 @@
 {
-  description = "Build print_time example to wasm32-wasi using crane";
+  description = "Build all WASM examples using crane";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
@@ -27,32 +27,45 @@
         };
         craneLib = (crane.mkLib pkgs).overrideToolchain rustWithWasmTarget;
 
-        src = craneLib.cleanCargoSource (craneLib.path ./examples/print_time);
-      in rec {
-        # Optionally build deps first for caching
-        cargoArtifacts = craneLib.buildDepsOnly {
-          inherit src;
-          CARGO_BUILD_TARGET = "wasm32-wasip2";
+        examplePackages = example: let
+          src = craneLib.cleanCargoSource (craneLib.path ./examples/${example});
+        in {
+          # Optionally build deps first for caching
+          "${example}-artifacts" = craneLib.buildDepsOnly {
+            inherit src;
+            CARGO_BUILD_TARGET = "wasm32-wasip2";
+          };
+
+          "${example}-wasm" = craneLib.buildPackage {
+            name = "${example}-wasm";
+            inherit src;
+            cargoArtifacts = self.packages.${system}."${example}-artifacts";
+            inheritToolchain = false;
+
+            CARGO_BUILD_TARGET = "wasm32-wasip2";
+            doCheck = false;
+
+            installPhase = ''
+              mkdir -p $out
+              cp -v target/wasm32-wasip2/release/${example}.wasm $out/
+            '';
+          };
         };
 
-        packages.print_time-wasm = craneLib.buildPackage {
-          pname = "print_time-wasm";
-          version = "0.1.0";
-          inherit src cargoArtifacts;
-          inheritToolchain = false;
+        examples = ["print_time" "print_args"];
 
-          # Build the example as wasm32-wasi
-          CARGO_BUILD_TARGET = "wasm32-wasip2";
-          doCheck = false;
-
-          # Install the produced .wasm artifact
-          installPhase = ''
-            mkdir -p $out
-            cp -v target/wasm32-wasip2/release/print_time.wasm $out/
-          '';
-        };
-
-        packages.default = self.packages.${system}.print_time-wasm;
+        packagesForExamples =
+          builtins.foldl' (acc: example: acc // examplePackages example) {}
+          examples;
+      in {
+        packages =
+          packagesForExamples
+          // {
+            default = pkgs.linkFarmFromDrvs "wasm-examples" (map (
+                example: self.packages.${system}."${example}-wasm"
+              )
+              examples);
+          };
       }
     );
 }
