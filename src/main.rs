@@ -341,11 +341,11 @@ impl cli::environment::Host for CtxPlayback {
     }
 }
 
-struct WallClock<Ctx> {
+struct Intercept<Ctx> {
     _marker: PhantomData<Ctx>,
 }
 
-impl<Ctx: 'static> HasData for WallClock<Ctx> {
+impl<Ctx: 'static> HasData for Intercept<Ctx> {
     type Data<'a> = &'a mut Ctx;
 }
 
@@ -432,7 +432,7 @@ where
     sync::io::error::add_to_linker::<T, HasIo>(&mut linker, |t| t.ctx().table)
         .context("failed to add wasi:io/error")?;
     // CLI
-    cli::environment::add_to_linker::<T, WallClock<T>>(&mut linker, |t| t)
+    cli::environment::add_to_linker::<T, Intercept<T>>(&mut linker, |t| t)
         .context("failed to add wasi:cli/environment")?;
     cli::stdin::add_to_linker::<T, WasiCli>(&mut linker, |t| t.cli())
         .context("failed to add wasi:cli/stdin")?;
@@ -453,7 +453,7 @@ where
     sync::filesystem::preopens::add_to_linker::<T, WasiFilesystem>(&mut linker, |t| t.filesystem())
         .context("failed to add wasi:filesystem/preopens")?;
     // Clocks (custom host implementation)
-    clocks::wall_clock::add_to_linker::<T, WallClock<T>>(&mut linker, |s| s)
+    clocks::wall_clock::add_to_linker::<T, Intercept<T>>(&mut linker, |s| s)
         .context("failed to add wasi:clocks/wall-clock")?;
     clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(&mut linker, |t| t.clocks())
         .context("failed to add wasi:clocks/monotonic-clock")?;
