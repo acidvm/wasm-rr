@@ -74,45 +74,62 @@ fn replay(wasm: &Path, trace: &Path) -> Result<()> {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "call", rename_all = "snake_case")]
-enum ClockCall {
-    Now { seconds: u64, nanoseconds: u32 },
-    Resolution { seconds: u64, nanoseconds: u32 },
+enum TraceEvent {
+    ClockNow { seconds: u64, nanoseconds: u32 },
+    ClockResolution { seconds: u64, nanoseconds: u32 },
+    Environment { entries: Vec<(String, String)> },
+    Arguments { args: Vec<String> },
+    InitialCwd { path: Option<String> },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TraceFile {
-    calls: Vec<ClockCall>,
+    events: Vec<TraceEvent>,
 }
 
 struct Recorder {
     output: PathBuf,
-    calls: Vec<ClockCall>,
+    events: Vec<TraceEvent>,
 }
 
 impl Recorder {
     fn new(output: PathBuf) -> Self {
         Self {
             output,
-            calls: Vec::new(),
+            events: Vec::new(),
         }
     }
 
     fn record_now(&mut self, dt: &clocks::wall_clock::Datetime) {
-        self.calls.push(ClockCall::Now {
+        self.events.push(TraceEvent::ClockNow {
             seconds: dt.seconds,
             nanoseconds: dt.nanoseconds,
         });
     }
 
     fn record_resolution(&mut self, dt: &clocks::wall_clock::Datetime) {
-        self.calls.push(ClockCall::Resolution {
+        self.events.push(TraceEvent::ClockResolution {
             seconds: dt.seconds,
             nanoseconds: dt.nanoseconds,
         });
     }
 
+    fn record_environment(&mut self, entries: Vec<(String, String)>) {
+        self.events.push(TraceEvent::Environment { entries });
+    }
+
+    fn record_arguments(&mut self, args: Vec<String>) {
+        self.events.push(TraceEvent::Arguments { args });
+    }
+
+    fn record_initial_cwd(&mut self, path: Option<String>) {
+        self.events.push(TraceEvent::InitialCwd { path });
+    }
+
     fn save(self) -> Result<()> {
-        let trace = TraceFile { calls: self.calls };
+        let trace = TraceFile {
+            events: self.events,
+        };
 
         let file = File::create(&self.output)
             .with_context(|| format!("failed to create trace file at {}", self.output.display()))?;
@@ -125,61 +142,84 @@ impl Recorder {
 }
 
 struct Playback {
-    calls: VecDeque<ClockCall>,
+    events: VecDeque<TraceEvent>,
 }
 
 impl Playback {
     fn from_file(path: &Path) -> Result<Self> {
         let file = File::open(path)
             .with_context(|| format!("failed to open trace file at {}", path.display()))?;
-        let TraceFile { calls } = serde_json::from_reader(file)
+        let TraceFile { events } = serde_json::from_reader(file)
             .with_context(|| format!("failed to parse trace file at {}", path.display()))?;
         Ok(Self {
-            calls: calls.into(),
+            events: events.into(),
         })
     }
 
+    fn next_event(&mut self) -> Result<TraceEvent> {
+        self.events.pop_front().ok_or(anyhow!("trace exhausted"))
+    }
+
     fn next_now(&mut self) -> Result<clocks::wall_clock::Datetime> {
-        match self.calls.pop_front() {
-            Some(ClockCall::Now {
+        match self.next_event()? {
+            TraceEvent::ClockNow {
                 seconds,
                 nanoseconds,
-            }) => Ok(clocks::wall_clock::Datetime {
+            } => Ok(clocks::wall_clock::Datetime {
                 seconds,
                 nanoseconds,
             }),
-            Some(other) => Err(anyhow!(
+            other => Err(anyhow!(
                 "expected next clock event to be 'now', got {:?}",
                 other
             )),
-            None => Err(anyhow!("trace exhausted before next 'now' value")),
         }
     }
 
     fn next_resolution(&mut self) -> Result<clocks::wall_clock::Datetime> {
-        match self.calls.pop_front() {
-            Some(ClockCall::Resolution {
+        match self.next_event()? {
+            TraceEvent::ClockResolution {
                 seconds,
                 nanoseconds,
-            }) => Ok(clocks::wall_clock::Datetime {
+            } => Ok(clocks::wall_clock::Datetime {
                 seconds,
                 nanoseconds,
             }),
-            Some(other) => Err(anyhow!(
+            other => Err(anyhow!(
                 "expected next clock event to be 'resolution', got {:?}",
                 other
             )),
-            None => Err(anyhow!("trace exhausted before next 'resolution' value")),
+        }
+    }
+
+    fn next_environment(&mut self) -> Result<Vec<(String, String)>> {
+        match self.next_event()? {
+            TraceEvent::Environment { entries } => Ok(entries),
+            other => Err(anyhow!("expected next environment event, got {:?}", other)),
+        }
+    }
+
+    fn next_arguments(&mut self) -> Result<Vec<String>> {
+        match self.next_event()? {
+            TraceEvent::Arguments { args } => Ok(args),
+            other => Err(anyhow!("expected next arguments event, got {:?}", other)),
+        }
+    }
+
+    fn next_initial_cwd(&mut self) -> Result<Option<String>> {
+        match self.next_event()? {
+            TraceEvent::InitialCwd { path } => Ok(path),
+            other => Err(anyhow!("expected next initial_cwd event, got {:?}", other)),
         }
     }
 
     fn finish(self) -> Result<()> {
-        if self.calls.is_empty() {
+        if self.events.is_empty() {
             Ok(())
         } else {
             Err(anyhow!(
                 "trace contains unused events: {:?}",
-                self.calls.into_iter().collect::<Vec<_>>()
+                self.events.into_iter().collect::<Vec<_>>()
             ))
         }
     }
@@ -228,6 +268,26 @@ impl clocks::wall_clock::Host for CtxRecorder {
     }
 }
 
+impl cli::environment::Host for CtxRecorder {
+    fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
+        let env = self.cli().get_environment()?;
+        self.recorder.record_environment(env.clone());
+        Ok(env)
+    }
+
+    fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
+        let args = self.cli().get_arguments()?;
+        self.recorder.record_arguments(args.clone());
+        Ok(args)
+    }
+
+    fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
+        let cwd = self.cli().initial_cwd()?;
+        self.recorder.record_initial_cwd(cwd.clone());
+        Ok(cwd)
+    }
+}
+
 struct CtxPlayback {
     table: ResourceTable,
     wasi: WasiCtx,
@@ -264,6 +324,20 @@ impl clocks::wall_clock::Host for CtxPlayback {
 
     fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
         self.playback.next_resolution()
+    }
+}
+
+impl cli::environment::Host for CtxPlayback {
+    fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
+        self.playback.next_environment()
+    }
+
+    fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
+        self.playback.next_arguments()
+    }
+
+    fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
+        self.playback.next_initial_cwd()
     }
 }
 
