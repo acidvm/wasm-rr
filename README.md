@@ -1,0 +1,1 @@
+`wasm-rr` records and replays the execution of WebAssembly programs.
