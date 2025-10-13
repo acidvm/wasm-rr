@@ -4,11 +4,13 @@ set -euo pipefail
 : "${WASM_RR_BIN:?WASM_RR_BIN must be set}"
 : "${PRINT_ARGS_WASM:?PRINT_ARGS_WASM must be set}"
 : "${PRINT_TIME_WASM:?PRINT_TIME_WASM must be set}"
+: "${PRINT_RANDOM_WASM:?PRINT_RANDOM_WASM must be set}"
 
 resolve_wasm() {
   case "$1" in
     print_args) printf '%s\n' "$PRINT_ARGS_WASM" ;;
     print_time) printf '%s\n' "$PRINT_TIME_WASM" ;;
+    print_random) printf '%s\n' "$PRINT_RANDOM_WASM" ;;
     *)
       echo "unknown component: $1" >&2
       return 1
@@ -32,6 +34,7 @@ print(data.get("scenario", ""))
 print(data["trace"])
 print(data["stdout"])
 print(data["stderr"])
+print("true" if data.get("must_fail", False) else "false")
 PY
   )
 
@@ -40,6 +43,7 @@ PY
   trace_rel="${meta[2]}"
   stdout_rel="${meta[3]}"
   stderr_rel="${meta[4]}"
+  must_fail="${meta[5]}"
 
   wasm_path="$(resolve_wasm "$component")" || {
     failures=$((failures + 1))
@@ -80,10 +84,20 @@ PY
     fi
   fi
 
-  if [[ "$fixture_fail" -eq 0 ]]; then
-    echo "✔ $label"
+  # Handle must_fail tests
+  if [[ "$must_fail" == "true" ]]; then
+    if [[ "$fixture_fail" -eq 1 ]]; then
+      echo "✓ Expected failure: $label"
+    else
+      echo "✗ Unexpected pass: $label (marked as must_fail but succeeded)" >&2
+      failures=$((failures + 1))
+    fi
   else
-    failures=$((failures + 1))
+    if [[ "$fixture_fail" -eq 0 ]]; then
+      echo "✔ $label"
+    else
+      failures=$((failures + 1))
+    fi
   fi
 
   rm -f "$actual_stdout" "$actual_stderr"

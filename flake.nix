@@ -119,6 +119,7 @@
                   export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
                   export PRINT_ARGS_WASM="${self.packages.${system}."print_args-wasm"}/print_args.wasm"
                   export PRINT_TIME_WASM="${self.packages.${system}."print_time-wasm"}/print_time.wasm"
+                  export PRINT_RANDOM_WASM="${self.packages.${system}."print_random-wasm"}/print_random.wasm"
                   ${goldenTestScript}
                 '';
               };

@@ -122,6 +122,57 @@ of date. Consider starting from a template like:
 - YYYY-MM-DD — Decision — Rationale
 ```
 
+## Golden Testing
+
+Golden testing in wasm-rr provides automated verification that replay outputs match expected results. The test infrastructure is implemented via Nix and consists of:
+
+### Golden Test Structure
+
+Golden fixtures are stored under `golden/<component>/` with the following files:
+- `metadata.toml` - Contains component name and references to other files
+- `trace.json` - The recorded execution trace
+- `stdout.txt` - Expected stdout output
+- `stderr.txt` - Expected stderr output
+
+### Running Golden Tests
+
+- `nix run .#golden-test` - Runs all golden tests, replaying traces and comparing outputs
+- `nix run .#golden-fixture` - Helper to record new golden fixtures from example components
+
+### Golden Test Implementation
+
+The golden test runner (`nix/golden-test.sh`) iterates through all `metadata.toml` files, replays the associated trace with the corresponding WASM component, and compares actual vs expected stdout/stderr using unified diff. Tests pass when replay outputs exactly match the golden fixtures.
+
+Currently supported examples with golden tests:
+- `print_args` - Tests argument passing and environment variables
+- `print_time` - Tests deterministic time functions
+
+### Adding New Golden Tests
+
+1. Create the example component under `examples/<name>/`
+2. Build it with `nix build .`
+3. Record golden fixtures with `nix run .#golden-fixture -- <component>`
+4. Add the component to the `examples` list in `flake.nix`
+5. Update `resolve_wasm()` in `nix/golden-test.sh` to include the new component
+
+### Known Failures Support
+
+Golden tests can be marked as expected failures using the `must_fail` flag in `metadata.toml`. This is useful for components with non-deterministic behavior that cannot yet be properly replayed:
+
+```toml
+component = "print_random"
+trace = "trace.json"
+stdout = "stdout.txt"
+stderr = "stderr.txt"
+must_fail = true  # Mark as expected failure
+```
+
+When a test is marked with `must_fail = true`:
+- If the test fails (replay doesn't match expected output): Shows "✓ Expected failure"
+- If the test passes unexpectedly: Shows "✗ Unexpected pass" and fails the test suite
+
+This allows tracking components with known issues (like `print_random` which uses random values not yet captured in traces) without breaking CI. When the underlying issue is fixed, simply remove or set `must_fail = false` to convert it to a regular test.
+
 ## Experience Reports
 
 ### Adding wasi:random/random Component (2025-10-13)
