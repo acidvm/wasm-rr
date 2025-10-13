@@ -58,6 +58,9 @@
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}
           examples;
+
+        goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
+        goldenTestScript = builtins.readFile ./nix/golden-test.sh;
       in {
         packages =
           packagesForExamples
@@ -76,7 +79,51 @@
                 examples
               )}
             '';
+            wasm-rr = craneLib.buildPackage {
+              pname = "wasm-rr";
+              version = "0.1.0";
+              src = craneLib.path ./.;
+              doCheck = false;
+            };
           };
+
+        apps = {
+          golden-fixture = flake-utils.lib.mkApp {
+            drv =
+              pkgs.writeShellApplication
+              {
+                name = "golden-fixture";
+                runtimeInputs = [
+                  self.packages.${system}.wasm-rr
+                  pkgs.coreutils
+                ];
+                text = ''
+                  export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
+                  ${goldenFixtureScript}
+                '';
+              };
+          };
+          golden-test = flake-utils.lib.mkApp {
+            drv =
+              pkgs.writeShellApplication
+              {
+                name = "golden-test";
+                runtimeInputs = [
+                  self.packages.${system}.wasm-rr
+                  pkgs.python3
+                  pkgs.diffutils
+                  pkgs.findutils
+                  pkgs.coreutils
+                ];
+                text = ''
+                  export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
+                  export PRINT_ARGS_WASM="${self.packages.${system}."print_args-wasm"}/print_args.wasm"
+                  export PRINT_TIME_WASM="${self.packages.${system}."print_time-wasm"}/print_time.wasm"
+                  ${goldenTestScript}
+                '';
+              };
+          };
+        };
       }
     );
 }

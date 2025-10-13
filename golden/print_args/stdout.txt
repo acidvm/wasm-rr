@@ -1,0 +1,3 @@
+program: print_args.wasm
+arg0: hello
+arg1: world

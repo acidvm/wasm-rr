@@ -1,0 +1,9 @@
+{
+  "events": [
+    {
+      "call": "clock_now",
+      "seconds": 1760299409,
+      "nanoseconds": 936653000
+    }
+  ]
+}

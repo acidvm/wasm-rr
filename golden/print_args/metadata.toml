@@ -1,0 +1,4 @@
+component = "print_args"
+trace = "trace.json"
+stdout = "stdout.txt"
+stderr = "stderr.txt"
