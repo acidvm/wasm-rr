@@ -44,10 +44,12 @@ The system will track these known failures in CI while preventing them from mask
 ## Implementation Approach
 
 1. **Metadata Schema Extension**:
+
    - Add optional `must_fail = true/false` field to metadata.toml
    - Default to false when not specified for backward compatibility
 
 2. **Test Runner Updates**:
+
    - Parse must_fail flag from metadata
    - For must_fail tests:
      - If replay fails or outputs mismatch: Report as "✓ Expected failure: <component>"

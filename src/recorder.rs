@@ -5,7 +5,8 @@ use anyhow::Context;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::cli::WasiCliView as _;
 use wasmtime_wasi::clocks::WasiClocksView as _;
-use wasmtime_wasi::p2::bindings::{cli, clocks};
+use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::random::WasiRandomView as _;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 use crate::{Result, TraceEvent, TraceFile};
@@ -47,6 +48,14 @@ impl Recorder {
 
     pub fn record_initial_cwd(&mut self, path: Option<String>) {
         self.events.push(TraceEvent::InitialCwd { path });
+    }
+
+    pub fn record_random_bytes(&mut self, bytes: Vec<u8>) {
+        self.events.push(TraceEvent::RandomBytes { bytes });
+    }
+
+    pub fn record_random_u64(&mut self, value: u64) {
+        self.events.push(TraceEvent::RandomU64 { value });
     }
 
     pub fn save(self) -> Result<()> {
@@ -124,5 +133,19 @@ impl cli::environment::Host for CtxRecorder {
         let cwd = self.cli().initial_cwd()?;
         self.recorder.record_initial_cwd(cwd.clone());
         Ok(cwd)
+    }
+}
+
+impl random::random::Host for CtxRecorder {
+    fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+        let bytes = self.random().get_random_bytes(len)?;
+        self.recorder.record_random_bytes(bytes.clone());
+        Ok(bytes)
+    }
+
+    fn get_random_u64(&mut self) -> anyhow::Result<u64> {
+        let value = self.random().get_random_u64()?;
+        self.recorder.record_random_u64(value);
+        Ok(value)
     }
 }

@@ -1,8 +1,9 @@
-use anyhow::{anyhow, Context, Result};
+mod playback;
+mod recorder;
+
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use std::fs::File;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use wasmtime::component::{Component, HasData, Linker, ResourceTable};
@@ -11,8 +12,7 @@ use wasmtime_wasi::cli::{WasiCli, WasiCliView as _};
 use wasmtime_wasi::clocks::{WasiClocks, WasiClocksView as _};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView as _};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync};
-use wasmtime_wasi::random::{WasiRandom, WasiRandomView as _};
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, propagate_version = true)]
@@ -60,15 +60,15 @@ fn main() -> Result<()> {
 
 fn record(wasm: &Path, trace: &Path, args: &[String]) -> Result<()> {
     let wasi = build_wasi_ctx(wasm, args);
-    let ctx = CtxRecorder::new(wasi, Recorder::new(trace.to_path_buf()));
+    let ctx = recorder::CtxRecorder::new(wasi, recorder::Recorder::new(trace.to_path_buf()));
     let ctx = run_wasm_with_wasi(wasm, ctx)?;
     ctx.into_recorder().save()
 }
 
 fn replay(wasm: &Path, trace: &Path) -> Result<()> {
-    let playback = Playback::from_file(trace)?;
+    let playback = playback::Playback::from_file(trace)?;
     let wasi = build_wasi_ctx(wasm, &[]);
-    let ctx = CtxPlayback::new(wasi, playback);
+    let ctx = playback::CtxPlayback::new(wasi, playback);
     let ctx = run_wasm_with_wasi(wasm, ctx)?;
     ctx.into_playback().finish()
 }
@@ -81,265 +81,13 @@ enum TraceEvent {
     Environment { entries: Vec<(String, String)> },
     Arguments { args: Vec<String> },
     InitialCwd { path: Option<String> },
+    RandomBytes { bytes: Vec<u8> },
+    RandomU64 { value: u64 },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TraceFile {
     events: Vec<TraceEvent>,
-}
-
-struct Recorder {
-    output: PathBuf,
-    events: Vec<TraceEvent>,
-}
-
-impl Recorder {
-    fn new(output: PathBuf) -> Self {
-        Self {
-            output,
-            events: Vec::new(),
-        }
-    }
-
-    fn record_now(&mut self, dt: &clocks::wall_clock::Datetime) {
-        self.events.push(TraceEvent::ClockNow {
-            seconds: dt.seconds,
-            nanoseconds: dt.nanoseconds,
-        });
-    }
-
-    fn record_resolution(&mut self, dt: &clocks::wall_clock::Datetime) {
-        self.events.push(TraceEvent::ClockResolution {
-            seconds: dt.seconds,
-            nanoseconds: dt.nanoseconds,
-        });
-    }
-
-    fn record_environment(&mut self, entries: Vec<(String, String)>) {
-        self.events.push(TraceEvent::Environment { entries });
-    }
-
-    fn record_arguments(&mut self, args: Vec<String>) {
-        self.events.push(TraceEvent::Arguments { args });
-    }
-
-    fn record_initial_cwd(&mut self, path: Option<String>) {
-        self.events.push(TraceEvent::InitialCwd { path });
-    }
-
-    fn save(self) -> Result<()> {
-        let trace = TraceFile {
-            events: self.events,
-        };
-
-        let file = File::create(&self.output)
-            .with_context(|| format!("failed to create trace file at {}", self.output.display()))?;
-
-        serde_json::to_writer_pretty(file, &trace)
-            .with_context(|| format!("failed to write trace file at {}", self.output.display()))?;
-
-        Ok(())
-    }
-}
-
-struct Playback {
-    events: VecDeque<TraceEvent>,
-}
-
-impl Playback {
-    fn from_file(path: &Path) -> Result<Self> {
-        let file = File::open(path)
-            .with_context(|| format!("failed to open trace file at {}", path.display()))?;
-        let TraceFile { events } = serde_json::from_reader(file)
-            .with_context(|| format!("failed to parse trace file at {}", path.display()))?;
-        Ok(Self {
-            events: events.into(),
-        })
-    }
-
-    fn next_event(&mut self) -> Result<TraceEvent> {
-        self.events.pop_front().ok_or(anyhow!("trace exhausted"))
-    }
-
-    fn next_now(&mut self) -> Result<clocks::wall_clock::Datetime> {
-        match self.next_event()? {
-            TraceEvent::ClockNow {
-                seconds,
-                nanoseconds,
-            } => Ok(clocks::wall_clock::Datetime {
-                seconds,
-                nanoseconds,
-            }),
-            other => Err(anyhow!(
-                "expected next clock event to be 'now', got {:?}",
-                other
-            )),
-        }
-    }
-
-    fn next_resolution(&mut self) -> Result<clocks::wall_clock::Datetime> {
-        match self.next_event()? {
-            TraceEvent::ClockResolution {
-                seconds,
-                nanoseconds,
-            } => Ok(clocks::wall_clock::Datetime {
-                seconds,
-                nanoseconds,
-            }),
-            other => Err(anyhow!(
-                "expected next clock event to be 'resolution', got {:?}",
-                other
-            )),
-        }
-    }
-
-    fn next_environment(&mut self) -> Result<Vec<(String, String)>> {
-        match self.next_event()? {
-            TraceEvent::Environment { entries } => Ok(entries),
-            other => Err(anyhow!("expected next environment event, got {:?}", other)),
-        }
-    }
-
-    fn next_arguments(&mut self) -> Result<Vec<String>> {
-        match self.next_event()? {
-            TraceEvent::Arguments { args } => Ok(args),
-            other => Err(anyhow!("expected next arguments event, got {:?}", other)),
-        }
-    }
-
-    fn next_initial_cwd(&mut self) -> Result<Option<String>> {
-        match self.next_event()? {
-            TraceEvent::InitialCwd { path } => Ok(path),
-            other => Err(anyhow!("expected next initial_cwd event, got {:?}", other)),
-        }
-    }
-
-    fn finish(self) -> Result<()> {
-        if self.events.is_empty() {
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "trace contains unused events: {:?}",
-                self.events.into_iter().collect::<Vec<_>>()
-            ))
-        }
-    }
-}
-
-struct CtxRecorder {
-    table: ResourceTable,
-    wasi: WasiCtx,
-    recorder: Recorder,
-}
-
-impl CtxRecorder {
-    fn new(wasi: WasiCtx, recorder: Recorder) -> Self {
-        Self {
-            table: ResourceTable::new(),
-            wasi,
-            recorder,
-        }
-    }
-
-    fn into_recorder(self) -> Recorder {
-        self.recorder
-    }
-}
-
-impl WasiView for CtxRecorder {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView {
-            ctx: &mut self.wasi,
-            table: &mut self.table,
-        }
-    }
-}
-
-impl clocks::wall_clock::Host for CtxRecorder {
-    fn now(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        let now = self.clocks().now()?;
-        self.recorder.record_now(&now);
-        Ok(now)
-    }
-
-    fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        let resolution = self.clocks().resolution()?;
-        self.recorder.record_resolution(&resolution);
-        Ok(resolution)
-    }
-}
-
-impl cli::environment::Host for CtxRecorder {
-    fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
-        let env = self.cli().get_environment()?;
-        self.recorder.record_environment(env.clone());
-        Ok(env)
-    }
-
-    fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
-        let args = self.cli().get_arguments()?;
-        self.recorder.record_arguments(args.clone());
-        Ok(args)
-    }
-
-    fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
-        let cwd = self.cli().initial_cwd()?;
-        self.recorder.record_initial_cwd(cwd.clone());
-        Ok(cwd)
-    }
-}
-
-struct CtxPlayback {
-    table: ResourceTable,
-    wasi: WasiCtx,
-    playback: Playback,
-}
-
-impl CtxPlayback {
-    fn new(wasi: WasiCtx, playback: Playback) -> Self {
-        Self {
-            table: ResourceTable::new(),
-            wasi,
-            playback,
-        }
-    }
-
-    fn into_playback(self) -> Playback {
-        self.playback
-    }
-}
-
-impl WasiView for CtxPlayback {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView {
-            ctx: &mut self.wasi,
-            table: &mut self.table,
-        }
-    }
-}
-
-impl clocks::wall_clock::Host for CtxPlayback {
-    fn now(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        self.playback.next_now()
-    }
-
-    fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        self.playback.next_resolution()
-    }
-}
-
-impl cli::environment::Host for CtxPlayback {
-    fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
-        self.playback.next_environment()
-    }
-
-    fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
-        self.playback.next_arguments()
-    }
-
-    fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
-        self.playback.next_initial_cwd()
-    }
 }
 
 struct Intercept<Ctx> {
@@ -375,7 +123,7 @@ fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
 fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> Result<T>
 where
     P: AsRef<Path>,
-    T: WasiView + clocks::wall_clock::Host + cli::environment::Host + 'static,
+    T: WasiView + clocks::wall_clock::Host + cli::environment::Host + random::random::Host + 'static,
 {
     let wasm_path = wasm_path.as_ref();
 
@@ -418,7 +166,7 @@ where
 
 fn configure_engine_and_linker<T>() -> Result<(Engine, Linker<T>)>
 where
-    T: WasiView + clocks::wall_clock::Host + cli::environment::Host + 'static,
+    T: WasiView + clocks::wall_clock::Host + cli::environment::Host + random::random::Host + 'static,
 {
     // Create an engine with the component model enabled and a component linker.
     let mut config = Config::new();
@@ -459,8 +207,8 @@ where
     clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(&mut linker, |t| t.clocks())
         .context("failed to add wasi:clocks/monotonic-clock")?;
 
-    // Random (standard WASI implementation)
-    random::random::add_to_linker::<T, WasiRandom>(&mut linker, |t| t.random())
+    // Random (custom host implementation)
+    random::random::add_to_linker::<T, Intercept<T>>(&mut linker, |s| s)
         .context("failed to add wasi:random/random")?;
 
     Ok((engine, linker))

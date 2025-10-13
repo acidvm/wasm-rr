@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::anyhow;
 use anyhow::Context;
 use wasmtime::component::ResourceTable;
-use wasmtime_wasi::p2::bindings::{cli, clocks};
+use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 use crate::{Result, TraceEvent, TraceFile};
@@ -82,6 +82,29 @@ impl Playback {
         }
     }
 
+    pub fn next_random_bytes(&mut self, expected_len: u64) -> Result<Vec<u8>> {
+        match self.next_event()? {
+            TraceEvent::RandomBytes { bytes } => {
+                if bytes.len() as u64 != expected_len {
+                    return Err(anyhow!(
+                        "random bytes length mismatch: expected {}, got {}",
+                        expected_len,
+                        bytes.len()
+                    ));
+                }
+                Ok(bytes)
+            }
+            other => Err(anyhow!("expected next random_bytes event, got {:?}", other)),
+        }
+    }
+
+    pub fn next_random_u64(&mut self) -> Result<u64> {
+        match self.next_event()? {
+            TraceEvent::RandomU64 { value } => Ok(value),
+            other => Err(anyhow!("expected next random_u64 event, got {:?}", other)),
+        }
+    }
+
     pub fn finish(self) -> Result<()> {
         if self.events.is_empty() {
             Ok(())
@@ -144,5 +167,15 @@ impl cli::environment::Host for CtxPlayback {
 
     fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
         self.playback.next_initial_cwd()
+    }
+}
+
+impl random::random::Host for CtxPlayback {
+    fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+        self.playback.next_random_bytes(len)
+    }
+
+    fn get_random_u64(&mut self) -> anyhow::Result<u64> {
+        self.playback.next_random_u64()
     }
 }
