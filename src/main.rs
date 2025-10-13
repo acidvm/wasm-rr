@@ -10,7 +10,8 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::cli::{WasiCli, WasiCliView as _};
 use wasmtime_wasi::clocks::{WasiClocks, WasiClocksView as _};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView as _};
-use wasmtime_wasi::p2::bindings::{cli, clocks, sync};
+use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync};
+use wasmtime_wasi::random::{WasiRandom, WasiRandomView as _};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 #[derive(Parser, Debug)]
@@ -457,6 +458,10 @@ where
         .context("failed to add wasi:clocks/wall-clock")?;
     clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(&mut linker, |t| t.clocks())
         .context("failed to add wasi:clocks/monotonic-clock")?;
+
+    // Random (standard WASI implementation)
+    random::random::add_to_linker::<T, WasiRandom>(&mut linker, |t| t.random())
+        .context("failed to add wasi:random/random")?;
 
     Ok((engine, linker))
 }

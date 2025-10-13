@@ -53,7 +53,7 @@
           };
         };
 
-        examples = ["print_time" "print_args"];
+        examples = ["print_time" "print_args" "print_random"];
 
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}

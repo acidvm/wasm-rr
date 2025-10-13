@@ -93,24 +93,37 @@ of date. Consider starting from a template like:
 - Last updated: …
 
 ## Description
+
 …
 
 ## Success Criteria
+
 - [ ] …
 
 ## Resources
+
 - …
 
 ## Risks & Mitigations
+
 - Risk: …  
   Mitigation: …
 
-## Checklist
-- [ ] Task (Owner, Target date)
+## Implementation steps
+
+- [ ] Task
 
 ## Open Questions
+
 - …
 
 ## Decision Log
+
 - YYYY-MM-DD — Decision — Rationale
 ```
+
+## Experience Reports
+
+### Adding wasi:random/random Component (2025-10-13)
+
+The key insight for adding missing WASI components to the linker was understanding the module structure in `wasmtime_wasi::p2::bindings`. Each WASI interface (e.g., `wasi:random/random`) maps to a nested module path (`random::random`) with an `add_to_linker` function. The pattern follows: import the module from bindings, import the corresponding view trait (e.g., `WasiRandom` and `WasiRandomView`), then call `module::interface::add_to_linker::<T, ViewType>(&mut linker, |t| t.view_method())`. This consistent pattern across all WASI components made it straightforward to add the missing random component once the [wasmtime-wasi docs](https://docs.rs/wasmtime-wasi/37.0.1/wasmtime_wasi/random/struct.WasiRandom.html) clarified the exact types and module paths needed.
