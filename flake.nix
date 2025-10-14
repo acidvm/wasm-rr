@@ -53,7 +53,7 @@
           };
         };
 
-        examples = ["print_time" "print_args" "print_random"];
+        examples = ["print_time" "print_args" "print_random" "fetch_quote"];
 
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}
@@ -120,6 +120,7 @@
                   export PRINT_ARGS_WASM="${self.packages.${system}."print_args-wasm"}/print_args.wasm"
                   export PRINT_TIME_WASM="${self.packages.${system}."print_time-wasm"}/print_time.wasm"
                   export PRINT_RANDOM_WASM="${self.packages.${system}."print_random-wasm"}/print_random.wasm"
+                  export FETCH_QUOTE_WASM="${self.packages.${system}."fetch_quote-wasm"}/fetch_quote.wasm"
                   ${goldenTestScript}
                 '';
               };

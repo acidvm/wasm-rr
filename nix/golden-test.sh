@@ -5,12 +5,14 @@ set -euo pipefail
 : "${PRINT_ARGS_WASM:?PRINT_ARGS_WASM must be set}"
 : "${PRINT_TIME_WASM:?PRINT_TIME_WASM must be set}"
 : "${PRINT_RANDOM_WASM:?PRINT_RANDOM_WASM must be set}"
+: "${FETCH_QUOTE_WASM:?FETCH_QUOTE_WASM must be set}"
 
 resolve_wasm() {
   case "$1" in
     print_args) printf '%s\n' "$PRINT_ARGS_WASM" ;;
     print_time) printf '%s\n' "$PRINT_TIME_WASM" ;;
     print_random) printf '%s\n' "$PRINT_RANDOM_WASM" ;;
+    fetch_quote) printf '%s\n' "$FETCH_QUOTE_WASM" ;;
     *)
       echo "unknown component: $1" >&2
       return 1

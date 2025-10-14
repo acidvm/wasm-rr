@@ -8,6 +8,7 @@ use wasmtime_wasi::clocks::WasiClocksView as _;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::random::WasiRandomView as _;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::{Result, TraceEvent, TraceFile};
 
@@ -58,6 +59,18 @@ impl Recorder {
         self.events.push(TraceEvent::RandomU64 { value });
     }
 
+    // HTTP recording methods - placeholder for future implementation
+    // Currently HTTP requests/responses are not intercepted and recorded
+    #[allow(dead_code)]
+    pub fn record_http_request(&mut self, method: String, url: String, headers: Vec<(String, String)>) {
+        self.events.push(TraceEvent::HttpRequest { method, url, headers });
+    }
+
+    #[allow(dead_code)]
+    pub fn record_http_response(&mut self, status: u16, headers: Vec<(String, String)>, body: Vec<u8>) {
+        self.events.push(TraceEvent::HttpResponse { status, headers, body });
+    }
+
     pub fn save(self) -> Result<()> {
         let trace = TraceFile {
             events: self.events,
@@ -76,14 +89,16 @@ impl Recorder {
 pub struct CtxRecorder {
     table: ResourceTable,
     wasi: WasiCtx,
+    http: WasiHttpCtx,
     recorder: Recorder,
 }
 
 impl CtxRecorder {
-    pub fn new(wasi: WasiCtx, recorder: Recorder) -> Self {
+    pub fn new(wasi: WasiCtx, http: WasiHttpCtx, recorder: Recorder) -> Self {
         Self {
             table: ResourceTable::new(),
             wasi,
+            http,
             recorder,
         }
     }
@@ -99,6 +114,16 @@ impl WasiView for CtxRecorder {
             ctx: &mut self.wasi,
             table: &mut self.table,
         }
+    }
+}
+
+impl WasiHttpView for CtxRecorder {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.http
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
     }
 }
 

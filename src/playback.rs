@@ -7,6 +7,7 @@ use anyhow::Context;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::{Result, TraceEvent, TraceFile};
 
@@ -105,6 +106,24 @@ impl Playback {
         }
     }
 
+    // HTTP playback methods - placeholder for future implementation
+    // Currently HTTP requests/responses are not intercepted and replayed
+    #[allow(dead_code)]
+    pub fn next_http_request(&mut self) -> Result<(String, String, Vec<(String, String)>)> {
+        match self.next_event()? {
+            TraceEvent::HttpRequest { method, url, headers } => Ok((method, url, headers)),
+            other => Err(anyhow!("expected next http_request event, got {:?}", other)),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn next_http_response(&mut self) -> Result<(u16, Vec<(String, String)>, Vec<u8>)> {
+        match self.next_event()? {
+            TraceEvent::HttpResponse { status, headers, body } => Ok((status, headers, body)),
+            other => Err(anyhow!("expected next http_response event, got {:?}", other)),
+        }
+    }
+
     pub fn finish(self) -> Result<()> {
         if self.events.is_empty() {
             Ok(())
@@ -120,14 +139,16 @@ impl Playback {
 pub struct CtxPlayback {
     table: ResourceTable,
     wasi: WasiCtx,
+    http: WasiHttpCtx,
     playback: Playback,
 }
 
 impl CtxPlayback {
-    pub fn new(wasi: WasiCtx, playback: Playback) -> Self {
+    pub fn new(wasi: WasiCtx, http: WasiHttpCtx, playback: Playback) -> Self {
         Self {
             table: ResourceTable::new(),
             wasi,
+            http,
             playback,
         }
     }
@@ -143,6 +164,16 @@ impl WasiView for CtxPlayback {
             ctx: &mut self.wasi,
             table: &mut self.table,
         }
+    }
+}
+
+impl WasiHttpView for CtxPlayback {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.http
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.table
     }
 }
 
