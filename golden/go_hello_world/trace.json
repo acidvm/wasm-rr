@@ -1,0 +1,27 @@
+{
+  "events": [
+    {
+      "call": "random_u64",
+      "value": 6028782984301059008
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "initial_cwd",
+      "path": null
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "go_hello_world.wasm"
+      ]
+    },
+    {
+      "call": "clock_now",
+      "seconds": 1760460967,
+      "nanoseconds": 481196000
+    }
+  ]
+}

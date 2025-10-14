@@ -102,6 +102,30 @@
           '';
         };
 
+        # Build Go Hello World example
+        go_hello_world-wasm = pkgs.stdenv.mkDerivation {
+          name = "go_hello_world-wasm";
+          src = ./examples/go_hello_world;
+
+          nativeBuildInputs = with pkgs; [
+            tinygo
+            wasm-tools
+          ];
+
+          buildPhase = ''
+            # Set up HOME directory for TinyGo
+            export HOME=$TMPDIR
+
+            # Compile Go to WASIp2 component using TinyGo
+            tinygo build -target=wasip2 -o go_hello_world.wasm main.go
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp go_hello_world.wasm $out/
+          '';
+        };
+
         goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
         goldenTestScript = builtins.readFile ./nix/golden-test.sh;
       in {
@@ -109,6 +133,7 @@
           packagesForExamples
           // {
             c_hello_world-wasm = c_hello_world-wasm;
+            go_hello_world-wasm = go_hello_world-wasm;
             default = pkgs.runCommand "wasm-examples" {} ''
               mkdir -p $out
               ${lib.concatStringsSep "\n" (
@@ -124,6 +149,8 @@
               )}
               # Add C Hello World example
               cp ${c_hello_world-wasm}/c_hello_world.wasm $out/c_hello_world.wasm
+              # Add Go Hello World example
+              cp ${go_hello_world-wasm}/go_hello_world.wasm $out/go_hello_world.wasm
             '';
             wasm-rr = craneLib.buildPackage {
               pname = "wasm-rr";
@@ -168,6 +195,7 @@
                   export PRINT_RANDOM_WASM="${self.packages.${system}."print_random-wasm"}/print_random.wasm"
                   export FETCH_QUOTE_WASM="${self.packages.${system}."fetch_quote-wasm"}/fetch_quote.wasm"
                   export C_HELLO_WORLD_WASM="${self.packages.${system}."c_hello_world-wasm"}/c_hello_world.wasm"
+                  export GO_HELLO_WORLD_WASM="${self.packages.${system}."go_hello_world-wasm"}/go_hello_world.wasm"
                   ${goldenTestScript}
                 '';
               };
