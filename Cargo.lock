@@ -2097,7 +2097,10 @@ name = "wasm-rr"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
+ "http-body-util",
+ "hyper",
  "serde",
  "serde_json",
  "wasmtime",

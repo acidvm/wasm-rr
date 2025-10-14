@@ -1,14 +1,20 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use bytes::Bytes;
+use http_body_util::{BodyExt, Full};
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::cli::WasiCliView as _;
 use wasmtime_wasi::clocks::WasiClocksView as _;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::random::WasiRandomView as _;
+use wasmtime_wasi::runtime;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::types::{
+    default_send_request, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
+};
+use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
 use crate::{Result, TraceEvent, TraceFile};
 
@@ -59,16 +65,23 @@ impl Recorder {
         self.events.push(TraceEvent::RandomU64 { value });
     }
 
-    // HTTP recording methods - placeholder for future implementation
-    // Currently HTTP requests/responses are not intercepted and recorded
-    #[allow(dead_code)]
-    pub fn record_http_request(&mut self, method: String, url: String, headers: Vec<(String, String)>) {
-        self.events.push(TraceEvent::HttpRequest { method, url, headers });
-    }
-
-    #[allow(dead_code)]
-    pub fn record_http_response(&mut self, status: u16, headers: Vec<(String, String)>, body: Vec<u8>) {
-        self.events.push(TraceEvent::HttpResponse { status, headers, body });
+    pub fn record_http_response(
+        &mut self,
+        request_method: String,
+        request_url: String,
+        request_headers: Vec<(String, String)>,
+        status: u16,
+        headers: Vec<(String, String)>,
+        body: Vec<u8>,
+    ) {
+        self.events.push(TraceEvent::HttpResponse {
+            request_method,
+            request_url,
+            request_headers,
+            status,
+            headers,
+            body,
+        });
     }
 
     pub fn save(self) -> Result<()> {
@@ -125,6 +138,81 @@ impl WasiHttpView for CtxRecorder {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
+
+    fn send_request(
+        &mut self,
+        request: hyper::Request<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> wasmtime_wasi_http::HttpResult<HostFutureIncomingResponse> {
+        let method = request.method().to_string();
+        let url = request.uri().to_string();
+        let request_headers = sorted_headers(request.headers())?;
+
+        let future = default_send_request(request, config);
+
+        let result = match future {
+            HostFutureIncomingResponse::Pending(handle) => {
+                runtime::in_tokio(async move { handle.await })
+            }
+            HostFutureIncomingResponse::Ready(res) => res,
+            HostFutureIncomingResponse::Consumed => {
+                return Err(HttpError::trap(anyhow!(
+                    "unexpected consumed HTTP response handle"
+                )))
+            }
+        };
+
+        let result = result.map_err(HttpError::trap)?;
+
+        let incoming = match result {
+            Ok(resp) => resp,
+            Err(code) => {
+                return Ok(HostFutureIncomingResponse::ready(Ok(Err(code))));
+            }
+        };
+
+        let between_bytes_timeout = incoming.between_bytes_timeout;
+        let (parts, body) = incoming.resp.into_parts();
+
+        let recorded_headers = sorted_headers(&parts.headers)?;
+
+        let bytes = runtime::in_tokio(async move { body.collect().await })
+            .map_err(|err| HttpError::trap(err))?
+            .to_bytes();
+
+        let body_vec = bytes.to_vec();
+
+        self.recorder.record_http_response(
+            method,
+            url,
+            request_headers,
+            parts.status.as_u16(),
+            recorded_headers,
+            body_vec.clone(),
+        );
+
+        let boxed_body = Full::new(Bytes::from(body_vec))
+            .map_err(|_| unreachable!("infallible body error"))
+            .boxed();
+
+        let mut builder = hyper::Response::builder().status(parts.status);
+        *builder
+            .headers_mut()
+            .ok_or_else(|| HttpError::trap(anyhow!("failed to access response headers")))? =
+            parts.headers.clone();
+
+        let resp = builder
+            .body(boxed_body)
+            .map_err(|err| HttpError::trap(err))?;
+
+        let incoming_response = IncomingResponse {
+            resp,
+            worker: None,
+            between_bytes_timeout,
+        };
+
+        Ok(HostFutureIncomingResponse::ready(Ok(Ok(incoming_response))))
+    }
 }
 
 impl clocks::wall_clock::Host for CtxRecorder {
@@ -173,4 +261,18 @@ impl random::random::Host for CtxRecorder {
         self.recorder.record_random_u64(value);
         Ok(value)
     }
+}
+
+fn sorted_headers(
+    headers: &hyper::HeaderMap,
+) -> wasmtime_wasi_http::HttpResult<Vec<(String, String)>> {
+    let mut pairs = Vec::new();
+    for (name, value) in headers.iter() {
+        let value = value
+            .to_str()
+            .map_err(|err| HttpError::trap(anyhow!("invalid header value for {}: {err}", name)))?;
+        pairs.push((name.as_str().to_string(), value.to_string()));
+    }
+    pairs.sort();
+    Ok(pairs)
 }

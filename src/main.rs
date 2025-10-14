@@ -75,19 +75,33 @@ fn replay(wasm: &Path, trace: &Path) -> Result<()> {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "call", rename_all = "snake_case")]
 enum TraceEvent {
-    ClockNow { seconds: u64, nanoseconds: u32 },
-    ClockResolution { seconds: u64, nanoseconds: u32 },
-    Environment { entries: Vec<(String, String)> },
-    Arguments { args: Vec<String> },
-    InitialCwd { path: Option<String> },
-    RandomBytes { bytes: Vec<u8> },
-    RandomU64 { value: u64 },
-    HttpRequest {
-        method: String,
-        url: String,
-        headers: Vec<(String, String)>,
+    ClockNow {
+        seconds: u64,
+        nanoseconds: u32,
+    },
+    ClockResolution {
+        seconds: u64,
+        nanoseconds: u32,
+    },
+    Environment {
+        entries: Vec<(String, String)>,
+    },
+    Arguments {
+        args: Vec<String>,
+    },
+    InitialCwd {
+        path: Option<String>,
+    },
+    RandomBytes {
+        bytes: Vec<u8>,
+    },
+    RandomU64 {
+        value: u64,
     },
     HttpResponse {
+        request_method: String,
+        request_url: String,
+        request_headers: Vec<(String, String)>,
         status: u16,
         headers: Vec<(String, String)>,
         body: Vec<u8>,
@@ -118,7 +132,12 @@ fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
 fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> Result<T>
 where
     P: AsRef<Path>,
-    T: WasiView + WasiHttpView + clocks::wall_clock::Host + cli::environment::Host + random::random::Host + 'static,
+    T: WasiView
+        + WasiHttpView
+        + clocks::wall_clock::Host
+        + cli::environment::Host
+        + random::random::Host
+        + 'static,
 {
     let wasm_path = wasm_path.as_ref();
 
@@ -161,9 +180,13 @@ where
 
 fn configure_engine_and_linker<T>() -> Result<(Engine, Linker<T>)>
 where
-    T: WasiView + WasiHttpView + clocks::wall_clock::Host + cli::environment::Host + random::random::Host + 'static,
+    T: WasiView
+        + WasiHttpView
+        + clocks::wall_clock::Host
+        + cli::environment::Host
+        + random::random::Host
+        + 'static,
 {
-
     // Create an engine with the component model enabled and a component linker.
     let mut config = Config::new();
     config.wasm_component_model(true);
@@ -181,7 +204,10 @@ where
     // We need to use a wrapper type pattern to make this work with the linker
     struct Intercept<T>(std::marker::PhantomData<T>);
     impl<T: 'static> wasmtime::component::HasData for Intercept<T> {
-        type Data<'a> = &'a mut T where T: 'a;
+        type Data<'a>
+            = &'a mut T
+        where
+            T: 'a;
     }
 
     clocks::wall_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
@@ -195,15 +221,17 @@ where
 }
 
 fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
-    use wasmtime_wasi::p2::bindings;
     use wasmtime::component::ResourceTable;
+    use wasmtime_wasi::p2::bindings;
 
     struct HasIo;
     impl wasmtime::component::HasData for HasIo {
         type Data<'a> = &'a mut ResourceTable;
     }
 
-    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
+    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(linker, |t| {
+        t.ctx().table
+    })?;
     bindings::sync::io::poll::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
     bindings::sync::io::streams::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
 
@@ -211,10 +239,10 @@ fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
 }
 
 fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<T>) -> Result<()> {
-    use wasmtime_wasi::p2::bindings;
     use wasmtime_wasi::cli::{WasiCli, WasiCliView};
     use wasmtime_wasi::clocks::{WasiClocks, WasiClocksView};
     use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView};
+    use wasmtime_wasi::p2::bindings;
     use wasmtime_wasi::random::{WasiRandom, WasiRandomView};
     use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsView};
 
@@ -222,7 +250,9 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     bindings::sync::cli::stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::exit::add_to_linker::<T, WasiCli>(linker, &Default::default(), |ctx| ctx.cli())?;
+    bindings::sync::cli::exit::add_to_linker::<T, WasiCli>(linker, &Default::default(), |ctx| {
+        ctx.cli()
+    })?;
     bindings::sync::cli::terminal_input::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_output::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
@@ -230,24 +260,44 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     bindings::sync::cli::terminal_stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
 
     // Add clocks components (except wall-clock which we intercept)
-    bindings::sync::clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(linker, |ctx| ctx.clocks())?;
+    bindings::sync::clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(linker, |ctx| {
+        ctx.clocks()
+    })?;
 
     // Add filesystem components
-    bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(linker, |ctx| ctx.filesystem())?;
-    bindings::sync::filesystem::preopens::add_to_linker::<T, WasiFilesystem>(linker, |ctx| ctx.filesystem())?;
+    bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
+        ctx.filesystem()
+    })?;
+    bindings::sync::filesystem::preopens::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
+        ctx.filesystem()
+    })?;
 
     // Add random components (except random which we intercept)
     bindings::sync::random::insecure::add_to_linker::<T, WasiRandom>(linker, |ctx| ctx.random())?;
-    bindings::sync::random::insecure_seed::add_to_linker::<T, WasiRandom>(linker, |ctx| ctx.random())?;
+    bindings::sync::random::insecure_seed::add_to_linker::<T, WasiRandom>(linker, |ctx| {
+        ctx.random()
+    })?;
 
     // Add socket components
     bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
     bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
-    bindings::sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
-    bindings::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
-    bindings::sockets::instance_network::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
-    bindings::sockets::network::add_to_linker::<T, WasiSockets>(linker, &Default::default(), |ctx| ctx.sockets())?;
-    bindings::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
+    bindings::sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(linker, |ctx| {
+        ctx.sockets()
+    })?;
+    bindings::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(linker, |ctx| {
+        ctx.sockets()
+    })?;
+    bindings::sockets::instance_network::add_to_linker::<T, WasiSockets>(linker, |ctx| {
+        ctx.sockets()
+    })?;
+    bindings::sockets::network::add_to_linker::<T, WasiSockets>(
+        linker,
+        &Default::default(),
+        |ctx| ctx.sockets(),
+    )?;
+    bindings::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(linker, |ctx| {
+        ctx.sockets()
+    })?;
 
     Ok(())
 }
