@@ -1,0 +1,6 @@
+Fetching quote from https://bash-org-archive.com/?random1...
+Following redirect to: /?12345
+
+--- Quote #22754 ---
+This output will vary because HTTP is not recorded/replayed yet
+-------------------
