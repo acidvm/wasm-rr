@@ -1,0 +1,4 @@
+component = "c_hello_world"
+trace = "trace.json"
+stdout = "stdout.txt"
+stderr = "stderr.txt"
