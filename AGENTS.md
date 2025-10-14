@@ -1,191 +1,224 @@
-# Repository Guidelines
+# wasm-rr Repository Reference
 
-## Project Structure & Module Organization
+## Structure
 
-The CLI entrypoint lives in `src/main.rs`, with record/replay logic in
-`src/recorder.rs` and `src/playback.rs`. Sample WebAssembly components reside in
-`examples/`, each with its own Cargo manifest; build them via `nix build .`,
-which writes artifacts to `result/*.wasm`. Generated artifacts for the CLI
-collect in `target/`; `rust-toolchain.toml` pins the toolchain expected by
-Wasmtime, and `flake.nix` offers a reproducible dev shell for Nix users.
+```
+src/main.rs         # CLI entrypoint
+src/recorder.rs     # Record logic
+src/playback.rs     # Replay logic
+examples/*/         # Sample WASM components
+target/             # Build artifacts
+result/*.wasm       # Nix build output
+rust-toolchain.toml # Wasmtime toolchain pin
+flake.nix           # Nix dev shell
+```
 
-## Build, Test, and Development Commands
+## Commands
 
-- `cargo build` – compiles the CLI; add `--release` when benchmarking replay
-  fidelity.
-- `cargo run -- record result/print_time.wasm -t traces/time.json -- --flag` –
-  records clock calls while forwarding trailing args to the component.
-- `cargo run -- replay …` – replays a previously captured trace; ensure the
-  `.wasm` binary matches the trace origin.
-- `nix build .` – compiles the example Wasm components and the CLI dependencies
-  into `result/`.
-- `cargo test` – runs unit and doc tests; use `cargo test -- --nocapture` when
-  you need stdout.
+```bash
+cargo build [--release]                                    # Build CLI
+cargo run -- record <wasm> -t <trace> [-- <args>]         # Record execution
+cargo run -- replay <wasm> -t <trace> [-- <args>]         # Replay trace
+nix build .                                                # Build examples + CLI
+cargo test [-- --nocapture]                               # Run tests
+cargo fmt && cargo clippy --all-targets --all-features    # Lint
+```
 
-## Coding Style & Naming Conventions
+## Code Standards
 
-Use Rust 2021 idioms with 4-space indentation; keep modules `snake_case`, types
-`CamelCase`, and constants `SCREAMING_SNAKE_CASE`. Run `cargo fmt` before
-submitting and prefer idiomatic error propagation via `anyhow::Context`. `cargo
-clippy --all-targets --all-features` is encouraged; heed lint suggestions unless
-there is a compelling reason not to. Trace event variants should remain
-descriptive but concise while preserving existing serde tags.
+- Rust 2021, 4-space indent
+- `snake_case` modules, `CamelCase` types, `SCREAMING_SNAKE_CASE` constants
+- Error propagation: `anyhow::Context`
+- Pre-commit: `cargo fmt`, address `clippy` warnings
+- Preserve serde tags in `TraceEvent` variants
 
-## Testing Guidelines
+## Testing
 
-Favor unit tests alongside the modules they cover; add integration tests under
-`tests/` when exercising the full record/replay loop. Keep traces committed for
-deterministic tests small and scrubbed of environment secrets. When fixing bugs,
-reproduce them with a focused Wasm example under `examples/` and record the
-expected trace. Manual validation should include a fresh `cargo run -- record`
-followed by `cargo run -- replay` to confirm parity.
+- Unit tests: Colocate with modules
+- Integration tests: `tests/` directory
+- Golden tests: See § Golden Testing
+- Bug fixes: Add example in `examples/`, record trace
+- Validation: `record` → `replay` parity check
 
-## Commit & Pull Request Guidelines
+## Commits
 
-Commits must follow Conventional Commits
-(https://www.conventionalcommits.org/en/v1.0.0/), e.g., `feat: add deterministic
-playback cache` or `fix(playback): guard empty trace`. Use semantic types
-(`feat`, `fix`, `refactor`, `chore`, `docs`, `test`) and scope when it adds
-clarity. Keep bodies concise and explain the rationale, not the diff. Group
-related changes so each commit compiles and passes tests. PRs must cite the
-reproduced issue, summarize validation steps (commands plus outcomes), and
-attach any new traces or screenshots that illustrate behavior changes. Link
-issues where relevant and note any backward-compatibility concerns or follow-up
-work in the description.
+Conventional Commits format:
+
+```
+<type>[(<scope>)]: <description>
+```
+
+Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
+
+Keep commit descriptions on points and refrain from adding "Co-authored by ..."
+
+PR requirements:
+
+- Link issue
+- Validation steps + outputs
+- New traces/screenshots
+- Note breaking changes
 
 ## Feature Plans
 
-Feature plans are living markdown documents that evolve as you work through a
-proposed feature or change. Each plan must include:
-
-- A single-sentence summary highlighting the feature intent.
-- A description that explains scope, motivation, and relevant constraints.
-- A resource list linking to specs, docs, prior art, or other references.
-- A checklist that decomposes the work and tracks progress, with owners and
-  target dates when known.
-
-To make plans actionable for agent-assisted development, also capture:
-
-- Success criteria that clarify how we will evaluate the change (metrics,
-  qualitative outcomes, or regression thresholds).
-- Dependencies and integration points, including other agents, services, or
-  external approvals.
-- Risks and mitigations, especially around safety, privacy, or drift in
-  autonomous behavior.
-- Open questions and decision log entries so collaborators and agents can
-  resolve them incrementally.
-
-When in doubt, describe validation paths explicitly (e.g., which `cargo` or
-`nix run` command exercises the change) and call out dependencies that should be
-packaged as tooling or scripts rather than ad-hoc shell steps. Prefer reusable
-automations for integration-style checks that rely on prebuilt artifacts or
-shared environments, and surface them directly in the plan so agents can invoke
-them. Embed telemetry or evaluation plans where applicable; agents can help run
-these checks, but they need the expectations documented up front. Keep the plan
-current as decisions shift, revising sections instead of letting them drift out
-of date. Consider starting from a template like:
+Required sections:
 
 ```markdown
-# <Feature Name> Plan
+# <Feature> Plan
 
-- Summary: …
-- Owner: …
-- Last updated: …
+- Summary: <one-sentence>
+- Owner: <name>
+- Last updated: <date>
 
 ## Description
 
-…
+<scope, motivation, constraints>
 
 ## Success Criteria
 
-- [ ] …
+- [ ] <measurable outcome>
 
 ## Resources
 
-- …
+- <specs, docs, prior art>
 
 ## Risks & Mitigations
 
-- Risk: …  
-  Mitigation: …
+- Risk: <issue> → Mitigation: <approach>
 
-## Implementation steps
+## Implementation
 
-- [ ] Task
+- [ ] <task with validation command>
 
 ## Open Questions
 
-- …
+- <unresolved items>
 
 ## Decision Log
 
-- YYYY-MM-DD — Decision — Rationale
+- YYYY-MM-DD — <decision> — <rationale>
 ```
 
 ## Golden Testing
 
-Golden testing in wasm-rr provides automated verification that replay outputs match expected results. The test infrastructure is implemented via Nix and consists of:
+### Structure
 
-### Golden Test Structure
+```
+golden/<component>/
+├── metadata.toml  # Component ref + flags
+├── trace.json     # Execution trace
+├── stdout.txt     # Expected stdout
+└── stderr.txt     # Expected stderr
+```
 
-Golden fixtures are stored under `golden/<component>/` with the following files:
-- `metadata.toml` - Contains component name and references to other files
-- `trace.json` - The recorded execution trace
-- `stdout.txt` - Expected stdout output
-- `stderr.txt` - Expected stderr output
+### Commands
 
-### Running Golden Tests
+```bash
+nix run .#golden-test     # Run all golden tests
+nix run .#golden-fixture  # Record new fixture
+```
 
-- `nix run .#golden-test` - Runs all golden tests, replaying traces and comparing outputs
-- `nix run .#golden-fixture` - Helper to record new golden fixtures from example components
-
-### Golden Test Implementation
-
-The golden test runner (`nix/golden-test.sh`) iterates through all `metadata.toml` files, replays the associated trace with the corresponding WASM component, and compares actual vs expected stdout/stderr using unified diff. Tests pass when replay outputs exactly match the golden fixtures.
-
-Currently supported examples with golden tests:
-- `print_args` - Tests argument passing and environment variables
-- `print_time` - Tests deterministic time functions
-
-### Adding New Golden Tests
-
-1. Create the example component under `examples/<name>/`
-2. Build it with `nix build .`
-3. Record golden fixtures with `nix run .#golden-fixture -- <component>`
-4. Add the component to the `examples` list in `flake.nix`
-5. Update `resolve_wasm()` in `nix/golden-test.sh` to include the new component
-
-### Known Failures Support
-
-Golden tests can be marked as expected failures using the `must_fail` flag in `metadata.toml`. This is useful for components with non-deterministic behavior that cannot yet be properly replayed:
+### metadata.toml
 
 ```toml
-component = "print_random"
+component = "<name>"
 trace = "trace.json"
 stdout = "stdout.txt"
 stderr = "stderr.txt"
-must_fail = true  # Mark as expected failure
+must_fail = true  # Optional: mark expected failures
 ```
 
-When a test is marked with `must_fail = true`:
-- If the test fails (replay doesn't match expected output): Shows "✓ Expected failure"
-- If the test passes unexpectedly: Shows "✗ Unexpected pass" and fails the test suite
+### Adding Tests
 
-This allows tracking components with known issues (like `print_random` which uses random values not yet captured in traces) without breaking CI. When the underlying issue is fixed, simply remove or set `must_fail = false` to convert it to a regular test.
+1. Create `examples/<name>/`
+2. Build: `nix build .`
+3. Record: `nix run .#golden-fixture -- <name>`
+4. Update `flake.nix` examples list
+5. Update `resolve_wasm()` in `nix/golden-test.sh`
 
-## Experience Reports
+### must_fail Behavior
 
-### Adding wasi:random/random Component (2025-10-13)
+- `must_fail = true` + test fails → ✓ Expected failure
+- `must_fail = true` + test passes → ✗ Unexpected pass (fails suite)
 
-The key insight for adding missing WASI components to the linker was understanding the module structure in `wasmtime_wasi::p2::bindings`. Each WASI interface (e.g., `wasi:random/random`) maps to a nested module path (`random::random`) with an `add_to_linker` function. The pattern follows: import the module from bindings, import the corresponding view trait (e.g., `WasiRandom` and `WasiRandomView`), then call `module::interface::add_to_linker::<T, ViewType>(&mut linker, |t| t.view_method())`. This consistent pattern across all WASI components made it straightforward to add the missing random component once the [wasmtime-wasi docs](https://docs.rs/wasmtime-wasi/37.0.1/wasmtime_wasi/random/struct.WasiRandom.html) clarified the exact types and module paths needed.
+## Implementation Patterns
 
-### Implementing Random Value Recording/Replay (2025-10-13)
+### WASI Component Integration
 
-Fixed the failing `print_random` golden test by implementing full recording and replay of random values. The solution followed the same pattern as clock interception:
+Pattern for adding WASI interfaces to linker:
 
-1. **Added trace events** - Extended `TraceEvent` enum with `RandomBytes` and `RandomU64` variants to capture random values
-2. **Implemented recording** - Added `random::random::Host` trait implementation for `CtxRecorder` that calls the real WASI random implementation and records the returned values
-3. **Implemented replay** - Added `random::random::Host` trait implementation for `CtxPlayback` that returns previously recorded random values from the trace
-4. **Updated linker** - Changed from using `WasiRandom` directly to using `Intercept<T>` for the random component, enabling our custom recording/replay logic
+```rust
+use wasmtime_wasi::p2::bindings::<interface_module>::<interface>;
+use wasmtime_wasi::<InterfaceView>;
 
-The key insight was that the `Intercept<T>` pattern allows forwarding host calls to the appropriate context (CtxRecorder during recording, CtxPlayback during replay), similar to how clocks and environment variables are handled. After these changes, `print_random` produces deterministic output during replay, converting it from a known failure (`must_fail = true`) to a passing test.
+<interface>::add_to_linker::<T, ViewType>(&mut linker, |t| t.view_method())?;
+```
+
+Example (wasi:random/random):
+
+```rust
+use wasmtime_wasi::p2::bindings::random::random;
+use wasmtime_wasi::{WasiRandom, WasiRandomView};
+
+random::add_to_linker::<T, WasiRandom>(&mut linker, |t| t.random())?;
+```
+
+### Recording/Replay Pattern
+
+For deterministic replay of non-deterministic host calls:
+
+1. Extend `TraceEvent` enum:
+
+```rust
+enum TraceEvent {
+    // ...
+    RandomBytes { bytes: Vec<u8> },
+    RandomU64 { value: u64 },
+}
+```
+
+2. Implement recording (`CtxRecorder`):
+
+```rust
+impl random::random::Host for CtxRecorder {
+    fn get_random_bytes(&mut self, len: u64) -> Result<Vec<u8>> {
+        let bytes = self.table.random().get_random_bytes(len)?;
+        self.events.push(TraceEvent::RandomBytes { bytes: bytes.clone() });
+        Ok(bytes)
+    }
+}
+```
+
+3. Implement replay (`CtxPlayback`):
+
+```rust
+impl random::random::Host for CtxPlayback {
+    fn get_random_bytes(&mut self, len: u64) -> Result<Vec<u8>> {
+        match self.events.next() {
+            Some(TraceEvent::RandomBytes { bytes }) => Ok(bytes),
+            _ => bail!("Trace mismatch"),
+        }
+    }
+}
+```
+
+4. Use `Intercept<T>` in linker:
+
+```rust
+random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |t| &mut t.inner)?;
+```
+
+## Experience Log
+
+### 2025-10-13: wasi:random/random
+
+- Module path: `wasmtime_wasi::p2::bindings::random::random`
+- View trait: `WasiRandom`, `WasiRandomView`
+- Pattern: `module::interface::add_to_linker::<T, ViewType>(&mut linker, |t| t.view_method())`
+
+### 2025-10-13: Random Value Recording
+
+- Extended `TraceEvent` with `RandomBytes`, `RandomU64`
+- Implemented `random::random::Host` for `CtxRecorder`/`CtxPlayback`
+- Used `Intercept<T>` pattern for host call forwarding
+- Result: Deterministic replay of random values (fixed `print_random` golden test)
