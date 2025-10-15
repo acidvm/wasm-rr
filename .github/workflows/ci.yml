@@ -13,8 +13,7 @@ jobs:
         # macOS-latest disabled: GitHub Actions macOS runners are significantly more expensive
         # than Linux runners (10x cost multiplier), making them unsuitable for regular CI runs
         # on open source projects with limited Actions budget.
-        # ARM Linux added as a more cost-effective alternative for testing cross-platform compatibility.
-        runner: [ubuntu-latest, ubuntu-24.04-arm64]
+        runner: [ubuntu-latest]
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
