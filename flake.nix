@@ -128,6 +128,11 @@
 
         goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
         goldenTestScript = builtins.readFile ./nix/golden-test.sh;
+
+        # Build dependencies for checks
+        cargoArtifacts = craneLib.buildDepsOnly {
+          src = craneLib.path ./.;
+        };
       in {
         packages =
           packagesForExamples
@@ -159,6 +164,56 @@
               doCheck = false;
             };
           };
+
+        checks = {
+          # Format check
+          fmt = craneLib.cargoFmt {
+            src = craneLib.path ./.;
+          };
+
+          # Clippy check
+          clippy = craneLib.cargoClippy {
+            inherit cargoArtifacts;
+            src = craneLib.path ./.;
+            cargoClippyExtraArgs = "--all-targets --all-features -- -D warnings";
+          };
+
+          # Cargo tests
+          test = craneLib.cargoTest {
+            inherit cargoArtifacts;
+            src = craneLib.path ./.;
+          };
+
+          # Golden tests
+          golden-test = pkgs.runCommand "golden-test-check" {
+            nativeBuildInputs = [
+              self.packages.${system}.wasm-rr
+              pkgs.python3
+              pkgs.diffutils
+              pkgs.findutils
+              pkgs.coreutils
+            ];
+          } ''
+            # Set up environment variables
+            export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
+            export PRINT_ARGS_WASM="${self.packages.${system}."print_args-wasm"}/print_args.wasm"
+            export PRINT_TIME_WASM="${self.packages.${system}."print_time-wasm"}/print_time.wasm"
+            export PRINT_RANDOM_WASM="${self.packages.${system}."print_random-wasm"}/print_random.wasm"
+            export FETCH_QUOTE_WASM="${self.packages.${system}."fetch_quote-wasm"}/fetch_quote.wasm"
+            export C_HELLO_WORLD_WASM="${self.packages.${system}."c_hello_world-wasm"}/c_hello_world.wasm"
+            export GO_HELLO_WORLD_WASM="${self.packages.${system}."go_hello_world-wasm"}/go_hello_world.wasm"
+
+            # Copy golden fixtures to writable location
+            cp -r ${./golden} ./golden
+            chmod -R u+w ./golden
+
+            # Run golden tests
+            ${goldenTestScript}
+
+            # If tests pass, create output
+            touch $out
+          '';
+        };
 
         apps = {
           golden-fixture = flake-utils.lib.mkApp {
