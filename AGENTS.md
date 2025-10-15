@@ -210,6 +210,44 @@ impl random::random::Host for CtxPlayback {
 random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |t| &mut t.inner)?;
 ```
 
+## PR Workflow for Agents
+
+When creating a pull request, follow this workflow:
+
+1. **Fetch latest changes from main**
+   ```bash
+   git fetch origin main
+   ```
+
+2. **Create a new branch based on updated main**
+   ```bash
+   git checkout -b <descriptive-branch-name> origin/main
+   ```
+
+3. **Make your changes**
+   - Follow code standards (see § Code Standards)
+   - Run tests and linting before committing
+   - Write clear commit messages using Conventional Commits format
+
+4. **Create a draft PR early**
+   ```bash
+   gh pr create --draft --title "<type>: <description>" --body "Work in progress"
+   ```
+
+   Creating a draft PR early allows:
+   - Early visibility of work in progress
+   - CI checks to run on pushes
+   - Easier collaboration and feedback
+
+5. **Continue development**
+   - Push commits as you work
+   - CI will run on each push to the PR branch
+
+6. **Mark PR as ready when complete**
+   ```bash
+   gh pr ready <number>
+   ```
+
 ## GitHub CLI Cheatsheet
 
 ```bash
