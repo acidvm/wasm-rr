@@ -248,9 +248,7 @@ impl WasiHttpView for CtxPlayback {
             .map_err(|_| unreachable!("infallible body error"))
             .boxed();
 
-        let response = builder
-            .body(boxed_body)
-            .map_err(|err| HttpError::trap(err))?;
+        let response = builder.body(boxed_body).map_err(HttpError::trap)?;
 
         let incoming = IncomingResponse {
             resp: response,

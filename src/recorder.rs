@@ -151,9 +151,7 @@ impl WasiHttpView for CtxRecorder {
         let future = default_send_request(request, config);
 
         let result = match future {
-            HostFutureIncomingResponse::Pending(handle) => {
-                runtime::in_tokio(async move { handle.await })
-            }
+            HostFutureIncomingResponse::Pending(handle) => runtime::in_tokio(handle),
             HostFutureIncomingResponse::Ready(res) => res,
             HostFutureIncomingResponse::Consumed => {
                 return Err(HttpError::trap(anyhow!(
@@ -177,7 +175,7 @@ impl WasiHttpView for CtxRecorder {
         let recorded_headers = sorted_headers(&parts.headers)?;
 
         let bytes = runtime::in_tokio(async move { body.collect().await })
-            .map_err(|err| HttpError::trap(err))?
+            .map_err(HttpError::trap)?
             .to_bytes();
 
         let body_vec = bytes.to_vec();
@@ -201,9 +199,7 @@ impl WasiHttpView for CtxRecorder {
             .ok_or_else(|| HttpError::trap(anyhow!("failed to access response headers")))? =
             parts.headers.clone();
 
-        let resp = builder
-            .body(boxed_body)
-            .map_err(|err| HttpError::trap(err))?;
+        let resp = builder.body(boxed_body).map_err(HttpError::trap)?;
 
         let incoming_response = IncomingResponse {
             resp,
