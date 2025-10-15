@@ -9,6 +9,7 @@ on:
 jobs:
   flakehub-publish:
     name: Publish flake to FlakeHub
+    if: github.repository == 'acidvm/wasm-rr'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
