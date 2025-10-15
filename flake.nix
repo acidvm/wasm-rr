@@ -6,6 +6,10 @@
     flake-utils.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
   outputs = {
@@ -14,6 +18,7 @@
     flake-utils,
     crane,
     rust-overlay,
+    advisory-db,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
@@ -189,6 +194,14 @@
           test = craneLib.cargoTest {
             inherit cargoArtifacts;
             src = craneLib.path ./.;
+          };
+
+          # Cargo audit check with pinned advisory database
+          audit = craneLib.cargoAudit {
+            inherit cargoArtifacts advisory-db;
+            src = craneLib.path ./.;
+            # Disable yanked check since it requires network access
+            cargoAuditExtraArgs = "--ignore yanked";
           };
 
           # Golden tests
