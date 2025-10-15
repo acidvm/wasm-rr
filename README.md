@@ -61,33 +61,12 @@ cargo run -- replay time-bomb.wasm bug-at-1337.json
 # 💥 Panic at 13:37 every time!
 ```
 
-## Golden Testing 🏆
-
-We use "golden" tests to ensure our record-replay mechanism works perfectly. Each test captures not just the trace, but also stdout/stderr output:
-
-```bash
-# Build everything
-nix build .
-
-# Record a new golden test fixture
-nix run .#golden-fixture -- print_random
-
-# Run all golden tests
-nix run .#golden-test
-```
-
-Golden fixtures live in `golden/<component>/` with:
-- `trace.json` – The recorded execution
-- `stdout.txt` – Expected standard output
-- `stderr.txt` – Expected error output
-- `metadata.toml` – Test configuration
-
 ## Get Started
 
 ### Prerequisites
 
-- Rust toolchain (we pin to a specific version via `rust-toolchain.toml`)
-- Nix (optional, but recommended for reproducible builds)
+- [Rust](https://rustup.rs) – We pin to a specific version via `rust-toolchain.toml`
+- [Nix](https://docs.determinate.systems) – Required for building test WASM components
 
 ### Building
 
@@ -144,7 +123,7 @@ Coming soon:
 
 ## Contributing
 
-Found a bug? Have an idea? We'd love your help! Check out [AGENTS.md](AGENTS.md) for our development guidelines and workflow.
+Found a bug? Have an idea? We'd love your help!
 
 ### Quick Development Commands
 
@@ -157,14 +136,11 @@ cargo fmt && cargo clippy --all-targets --all-features
 
 # Run golden tests
 nix run .#golden-test
-
-# Record new golden fixture
-nix run .#golden-fixture -- <component-name>
 ```
 
 ## License
 
-[Add your license here]
+This project is released under the [Unlicense](LICENSE) – free and unencumbered software released into the public domain.
 
 ## Why "wasm-rr"?
 
