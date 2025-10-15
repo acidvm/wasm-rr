@@ -10,6 +10,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "04:00"
+      timezone: "UTC"
     open-pull-requests-limit: 10
     groups:
       wasmtime:
@@ -25,10 +26,7 @@ updates:
     labels:
       - "dependencies"
       - "rust"
-    reviewers:
-      # Add your GitHub username or team here if desired
-      # - "username"
-      # - "organization/team-name"
+    reviewers: []
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -37,6 +35,8 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore"
       prefix-development: "chore"
