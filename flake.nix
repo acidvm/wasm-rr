@@ -136,18 +136,18 @@
 
         # All WASM components - both Rust and non-Rust
         allWasmComponents = {
-          print_args = self.packages.${system}."print_args-wasm";
-          print_time = self.packages.${system}."print_time-wasm";
-          print_random = self.packages.${system}."print_random-wasm";
-          fetch_quote = self.packages.${system}."fetch_quote-wasm";
-          c_hello_world = self.packages.${system}."c_hello_world-wasm";
-          go_hello_world = self.packages.${system}."go_hello_world-wasm";
+          print_args = packagesForExamples."print_args-wasm";
+          print_time = packagesForExamples."print_time-wasm";
+          print_random = packagesForExamples."print_random-wasm";
+          fetch_quote = packagesForExamples."fetch_quote-wasm";
+          c_hello_world = c_hello_world-wasm;
+          go_hello_world = go_hello_world-wasm;
         };
 
         # Generate environment variables for golden tests
         wasmEnvVars = lib.concatStringsSep "\n" (
           lib.mapAttrsToList (name: pkg:
-            ''export ${lib.toUpper name}_WASM="${pkg}/${name}.wasm"''
+            ''export ${lib.strings.toUpper name}_WASM="${pkg}/${name}.wasm"''
           ) allWasmComponents
         );
       in {
