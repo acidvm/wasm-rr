@@ -1,0 +1,18 @@
+{
+  "events": [
+    {
+      "call": "arguments",
+      "args": [
+        "counts.wasm",
+        "--help"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "counts.wasm",
+        "--help"
+      ]
+    }
+  ]
+}
