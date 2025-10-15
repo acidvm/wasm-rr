@@ -26,7 +26,6 @@ updates:
     labels:
       - "dependencies"
       - "rust"
-    reviewers: []
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
