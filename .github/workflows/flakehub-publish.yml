@@ -11,6 +11,9 @@ jobs:
     name: Publish flake to FlakeHub
     if: github.repository == 'acidvm/wasm-rr'
     runs-on: ubuntu-24.04
+    concurrency:
+      group: flakehub-publish-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       id-token: write
       contents: read
