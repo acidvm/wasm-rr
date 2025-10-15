@@ -1,5 +1,7 @@
 # wasm-rr Repository Reference
 
+A deterministic record-replay tool for WebAssembly components, capturing and replaying non-deterministic host calls including clocks, random values, environment variables, and HTTP responses.
+
 ## Structure
 
 ```
@@ -17,8 +19,8 @@ flake.nix           # Nix dev shell
 
 ```bash
 cargo build [--release]                                    # Build CLI
-cargo run -- record <wasm> -t <trace> [-- <args>]         # Record execution
-cargo run -- replay <wasm> -t <trace> [-- <args>]         # Replay trace
+cargo run -- record <wasm> [-t <trace>] [-- <args>]       # Record execution (default: wasm-rr-trace.json)
+cargo run -- replay <wasm> [<trace>]                       # Replay trace (default: wasm-rr-trace.json)
 nix build .                                                # Build examples + CLI
 cargo test [-- --nocapture]                               # Run tests
 cargo fmt && cargo clippy --all-targets --all-features    # Lint
@@ -208,6 +210,70 @@ impl random::random::Host for CtxPlayback {
 random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |t| &mut t.inner)?;
 ```
 
+## GitHub CLI Cheatsheet
+
+```bash
+# Pull Request Management
+gh pr create --title "title" --body "description"          # Create PR
+gh pr create --draft                                        # Create draft PR
+gh pr list                                                   # List PRs
+gh pr view <number>                                          # View PR details
+gh pr checkout <number>                                      # Checkout PR branch
+gh pr review <number> --approve                             # Approve PR
+gh pr merge <number>                                         # Merge PR
+gh pr close <number>                                         # Close PR
+
+# Issue Management
+gh issue create --title "title" --body "description"        # Create issue
+gh issue list                                               # List issues
+gh issue view <number>                                      # View issue
+gh issue close <number>                                      # Close issue
+
+# Repository Operations
+gh repo clone <owner>/<repo>                                # Clone repository
+gh repo fork                                                # Fork repository
+gh repo view                                                # View repo info
+
+# Workflow/CI
+gh run list                                                  # List workflow runs
+gh run view <id>                                            # View run details
+gh run watch <id>                                           # Watch run progress
+gh workflow list                                            # List workflows
+```
+
+## Nix Cheatsheet
+
+```bash
+# Building
+nix build .                                                  # Build default package
+nix build .#<package>                                        # Build specific package
+nix build .#wasm-rr                                         # Build CLI tool
+nix build .#print_time-wasm                                 # Build example component
+
+# Running
+nix run .                                                    # Run default package
+nix run .#golden-test                                        # Run all golden tests
+nix run .#golden-fixture -- <name>                          # Record golden fixture
+
+# Development
+nix develop                                                  # Enter dev shell
+nix develop -c <command>                                     # Run command in dev shell
+nix flake check                                              # Run all checks
+nix flake show                                               # Show flake outputs
+nix flake update                                             # Update flake inputs
+
+# Evaluation and Debugging
+nix eval .#<attribute>                                       # Evaluate expression
+nix repl                                                     # Interactive Nix REPL
+nix log <store-path>                                         # View build logs
+nix why-depends <package> <dependency>                      # Show dependency chain
+
+# Common Patterns
+nix build . && ./result/bin/wasm-rr                         # Build and run
+nix develop -c cargo test                                   # Run tests in dev shell
+nix flake check --print-build-logs                          # Check with logs
+```
+
 ## Experience Log
 
 ### 2025-10-13: wasi:random/random
@@ -222,3 +288,9 @@ random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |t| &mut t.inner)?
 - Implemented `random::random::Host` for `CtxRecorder`/`CtxPlayback`
 - Used `Intercept<T>` pattern for host call forwarding
 - Result: Deterministic replay of random values (fixed `print_random` golden test)
+
+### 2025-10-15: Extended Interface Support
+
+- Added recording/replay for: environment variables, arguments, initial CWD
+- Implemented wasi:http support with request/response recording
+- TraceEvent variants now include: `ClockNow`, `ClockResolution`, `Environment`, `Arguments`, `InitialCwd`, `RandomBytes`, `RandomU64`, `HttpResponse`
