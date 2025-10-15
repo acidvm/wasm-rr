@@ -80,19 +80,23 @@ nix build .
 
 ### Running Examples
 
-We include several example WASM components to play with:
+We include several example WASM components to play with. First, build them:
 
 ```bash
+# Build all examples with Nix
+nix build .
+
+# Now run the examples
 # See what time the WASM component thinks it is
-cargo run -- record examples/print_time/print_time.wasm
-cargo run -- replay examples/print_time/print_time.wasm
+cargo run -- record result/print_time.wasm
+cargo run -- replay result/print_time.wasm
 
 # Watch random numbers become deterministic
-cargo run -- record examples/print_random/print_random.wasm
-cargo run -- replay examples/print_random/print_random.wasm
+cargo run -- record result/print_random.wasm
+cargo run -- replay result/print_random.wasm
 
 # Test with arguments
-cargo run -- record examples/print_args/print_args.wasm -- hello world
+cargo run -- record result/print_args.wasm -- hello world
 ```
 
 ## How It Works
