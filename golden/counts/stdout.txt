@@ -1,0 +1,12 @@
+counts: a tool for ad hoc profiling
+
+USAGE:
+    counts [OPTIONS] [FILES]
+
+OPTIONS:
+    -h, --help     Print help information
+    --version      Print version information
+    -i, -w         Integral weighting of lines
+    -f             Fractional weighting of lines
+    -e             Erase weights after applying, replacing them with `NNN`
+
