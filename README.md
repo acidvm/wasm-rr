@@ -146,10 +146,6 @@ nix run .#golden-test
 
 This project is released under the [Unlicense](LICENSE) – free and unencumbered software released into the public domain.
 
-## Why "wasm-rr"?
-
-**W**eb**A**ssembly **S**eamless **M**agic **R**ecord-**R**eplay... okay, we just liked how it sounded. 🎭
-
 ---
 
 *Built with 🦀 Rust and a sprinkle of time-travel magic*
