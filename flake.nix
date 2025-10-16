@@ -17,13 +17,13 @@
   };
 
   outputs = {
-    self,
     nixpkgs,
     flake-utils,
     crane,
     rust-overlay,
     advisory-db,
     ghc-wasm-meta,
+    ...
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
@@ -186,6 +186,11 @@
         goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
         goldenTestScript = builtins.readFile ./nix/golden-test.sh;
 
+        # Extract package metadata from Cargo.toml
+        cargoToml = craneLib.crateNameFromCargoToml {
+          cargoToml = ./Cargo.toml;
+        };
+
         # Build dependencies for checks
         cargoArtifacts = craneLib.buildDepsOnly {
           src = craneLib.path ./.;
@@ -205,8 +210,7 @@
 
         # Build wasm-rr CLI tool with dependency caching
         wasm-rr = craneLib.buildPackage {
-          pname = "wasm-rr";
-          version = "0.1.0";
+          inherit (cargoToml) pname version;
           src = craneLib.path ./.;
           inherit cargoArtifacts;
           doCheck = false;
