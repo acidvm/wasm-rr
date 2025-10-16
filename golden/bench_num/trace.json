@@ -7,50 +7,63 @@
     {
       "call": "random_bytes",
       "bytes": [
-        224,
-        245,
-        81,
-        179,
-        185,
-        205,
-        197,
-        9,
-        221,
-        7,
-        202,
-        24,
-        200,
-        202,
+        34,
+        172,
+        243,
+        73,
+        253,
+        156,
+        108,
+        147,
+        20,
+        60,
+        217,
+        84,
+        174,
         229,
-        233
+        85,
+        83
       ]
     },
     {
       "call": "arguments",
       "args": [
         "bench_num.wasm",
-        "--quick"
+        "--bench",
+        "--quick",
+        "--discard-baseline"
       ]
     },
     {
       "call": "arguments",
       "args": [
         "bench_num.wasm",
-        "--quick"
+        "--bench",
+        "--quick",
+        "--discard-baseline"
+      ]
+    },
+    {
+      "call": "clock_now",
+      "seconds": 1760634164,
+      "nanoseconds": 59712000
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--bench",
+        "--quick",
+        "--discard-baseline"
       ]
     },
     {
       "call": "arguments",
       "args": [
         "bench_num.wasm",
-        "--quick"
-      ]
-    },
-    {
-      "call": "arguments",
-      "args": [
-        "bench_num.wasm",
-        "--quick"
+        "--bench",
+        "--quick",
+        "--discard-baseline"
       ]
     }
   ]

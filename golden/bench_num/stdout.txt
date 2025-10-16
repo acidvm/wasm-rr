@@ -1,6 +1,4 @@
-Testing bigint_multiply_fib100
-Success
+bigint_multiply_fib100  time:   [48.026 ns 48.341 ns 48.420 ns]
 
-Testing bigint_fibonacci_50
-Success
+bigint_fibonacci_50     time:   [1.7761 µs 1.7765 µs 1.7782 µs]
 
