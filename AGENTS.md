@@ -21,7 +21,8 @@ flake.nix           # Nix dev shell
 cargo build [--release]                                    # Build CLI
 cargo run -- record <wasm> [-t <trace>] [-- <args>]       # Record execution (default: wasm-rr-trace.json)
 cargo run -- replay <wasm> [<trace>]                       # Replay trace (default: wasm-rr-trace.json)
-nix build .                                                # Build examples + CLI
+nix build .                                                # Build wasm-rr CLI tool
+nix build .#wasm-examples                                  # Build all WASM examples
 cargo test [-- --nocapture]                               # Run tests
 cargo fmt && cargo clippy --all-targets --all-features    # Lint
 ```
@@ -283,13 +284,14 @@ gh workflow list                                            # List workflows
 
 ```bash
 # Building
-nix build .                                                  # Build default package
+nix build .                                                  # Build wasm-rr CLI tool (default)
+nix build .#wasm-examples                                    # Build all WASM examples
 nix build .#<package>                                        # Build specific package
-nix build .#wasm-rr                                         # Build CLI tool
-nix build .#print_time-wasm                                 # Build example component
+nix build .#print_time-wasm                                 # Build specific example component
+nix build .#counts-wasm                                      # Build counts WASM component
 
 # Running
-nix run .                                                    # Run default package
+nix run .                                                    # Run wasm-rr CLI tool
 nix run .#golden-test                                        # Run all golden tests
 nix run .#golden-fixture -- <name>                          # Record golden fixture
 
@@ -307,7 +309,8 @@ nix log <store-path>                                         # View build logs
 nix why-depends <package> <dependency>                      # Show dependency chain
 
 # Common Patterns
-nix build . && ./result/bin/wasm-rr                         # Build and run
+nix build . && ./result/bin/wasm-rr                         # Build and run wasm-rr
+nix build .#wasm-examples && ls result/                     # Build examples and list
 nix develop -c cargo test                                   # Run tests in dev shell
 nix flake check --print-build-logs                          # Check with logs
 ```
