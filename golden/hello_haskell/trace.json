@@ -1,0 +1,20 @@
+{
+  "events": [
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "hello_haskell.wasm"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "hello_haskell.wasm"
+      ]
+    }
+  ]
+}

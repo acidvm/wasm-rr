@@ -10,6 +10,10 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+    ghc-wasm-meta = {
+      url = "gitlab:haskell-wasm/ghc-wasm-meta?host=gitlab.haskell.org";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -19,6 +23,7 @@
     crane,
     rust-overlay,
     advisory-db,
+    ghc-wasm-meta,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
@@ -131,6 +136,39 @@
           '';
         };
 
+        # Build Haskell Hello World example
+        hello_haskell-wasm = pkgs.stdenv.mkDerivation {
+          name = "hello_haskell-wasm";
+          src = ./examples/hello_haskell;
+
+          nativeBuildInputs = with pkgs; [
+            wasm-tools
+          ] ++ lib.optionals (ghc-wasm-meta ? packages.${system}) [
+            ghc-wasm-meta.packages.${system}.all_9_10
+          ];
+
+          buildPhase = ''
+            # Set up HOME directory
+            export HOME=$TMPDIR
+
+            # Compile directly with GHC (bypassing cabal to avoid network access)
+            wasm32-wasi-ghc \
+              -o hello-haskell.wasm \
+              -O2 \
+              Main.hs
+
+            # Convert to WASI p2 component using adapter
+            wasm-tools component new hello-haskell.wasm \
+              --adapt wasi_snapshot_preview1=${wasi-adapter} \
+              -o hello_haskell.wasm
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp hello_haskell.wasm $out/
+          '';
+        };
+
         # Build counts tool from GitHub release
         counts-wasm = let
           countsSrc = pkgs.fetchFromGitHub {
@@ -168,6 +206,7 @@
           fetch_quote = packagesForExamples."fetch_quote-wasm";
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
+          hello_haskell = hello_haskell-wasm;
           counts = counts-wasm;
         };
 
@@ -183,6 +222,7 @@
           // {
             c_hello_world-wasm = c_hello_world-wasm;
             go_hello_world-wasm = go_hello_world-wasm;
+            hello_haskell-wasm = hello_haskell-wasm;
             counts-wasm = counts-wasm;
             # wasm-rr is now the default package
             default = craneLib.buildPackage {

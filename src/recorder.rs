@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use wasmtime::component::ResourceTable;
-use wasmtime_wasi::cli::WasiCliView as _;
+use wasmtime_wasi::cli::WasiCliView;
 use wasmtime_wasi::clocks::WasiClocksView as _;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::random::WasiRandomView as _;
