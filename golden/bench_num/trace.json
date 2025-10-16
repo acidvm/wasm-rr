@@ -1,0 +1,910 @@
+{
+  "events": [
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "random_bytes",
+      "bytes": [
+        173,
+        253,
+        145,
+        74,
+        41,
+        215,
+        231,
+        209,
+        19,
+        250,
+        158,
+        113,
+        135,
+        64,
+        63,
+        96
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--bench",
+        "--quick",
+        "--discard-baseline"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--bench",
+        "--quick",
+        "--discard-baseline"
+      ]
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118340458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118341333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118341417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118346958
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118347042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118347458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118347583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118347625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118347917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118348792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118349250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118349292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118349375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118349417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118349500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118350333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118350375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118350458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118350542
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118350583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118352208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118352500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118352583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118352667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118352708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118356000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118356042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118356167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118356208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118356292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118362833
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118362875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118362958
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118363042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118363083
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118376083
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118376125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118376208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118376292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118376333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118401750
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118401792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118401833
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118401917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118401958
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118457250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118457333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118457417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118457500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118457583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118552667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118552708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118552792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118552917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118553000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118741208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118741250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118741333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118741417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 118741500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119115417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119115500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119115542
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119115625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119115667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119867042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119867083
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119867167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119867250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 119867292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121634583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121635000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121635458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121635667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121635750
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 125016583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 125016625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 125016708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 125016792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 125016875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 131438458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 131439042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 131439875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 131440208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 131440333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 143319917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 143320583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 143321208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 143321792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 143321833
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 170399875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 170400500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 170401583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 170402000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 170402083
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 219579375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 219579458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 219579625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 219579792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 219579958
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 326485542
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 326486583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 326487833
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 326488083
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 326488167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 521870167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 521870875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 521871792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 521872125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 521872250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 932242583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 932243292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 932244208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 932310917
+    },
+    {
+      "call": "clock_now",
+      "seconds": 1760635124,
+      "nanoseconds": 912625000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 940423625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 941513208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943123792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943489750
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943490208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943490333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943493500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943493583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943493750
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943493875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943494042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943498167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943498250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943498333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943498500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943498583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943506208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943506292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943506375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943506417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943506500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943521667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943521708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943521792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943521875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943521917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943553125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943553167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943553250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943553333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943553375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943614333
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943614375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943614458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943614542
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943614583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943738583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943738625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943738708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943738792
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943738833
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943986042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943986125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943986167
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943986250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 943986292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 944499583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 944500042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 944500500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 944500625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 944500708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 945469375
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 945469417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 945469542
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 945469625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 945469667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 947395417
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 947395500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 947395542
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 947395625
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 947395708
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 951287917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 951287958
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 951288042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 951288125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 951288208
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 958863042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 958863875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 958864750
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 958865000
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 958865042
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 974410833
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 974411583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 974412500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 974412667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 974412750
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1005198583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1005199292
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1005199875
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1005200083
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1005200250
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1066461917
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1066462667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1066463500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1066513667
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1074474500
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1075561583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 1077208375
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--bench",
+        "--quick",
+        "--discard-baseline"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--bench",
+        "--quick",
+        "--discard-baseline"
+      ]
+    }
+  ]
+}

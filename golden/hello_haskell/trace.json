@@ -15,6 +15,50 @@
       "args": [
         "hello_haskell.wasm"
       ]
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121933666
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121942791
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121961125
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 121965416
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122154541
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122154583
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122256291
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122256416
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122739458
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122814916
+    },
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 122815083
     }
   ]
 }

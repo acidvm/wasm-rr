@@ -45,6 +45,16 @@ impl Recorder {
         });
     }
 
+    pub fn record_monotonic_now(&mut self, nanoseconds: u64) {
+        self.events
+            .push(TraceEvent::MonotonicClockNow { nanoseconds });
+    }
+
+    pub fn record_monotonic_resolution(&mut self, nanoseconds: u64) {
+        self.events
+            .push(TraceEvent::MonotonicClockResolution { nanoseconds });
+    }
+
     pub fn record_environment(&mut self, entries: Vec<(String, String)>) {
         self.events.push(TraceEvent::Environment { entries });
     }
@@ -225,6 +235,44 @@ impl clocks::wall_clock::Host for CtxRecorder {
         let resolution = self.clocks().resolution()?;
         self.recorder.record_resolution(&resolution);
         Ok(resolution)
+    }
+}
+
+impl clocks::monotonic_clock::Host for CtxRecorder {
+    fn now(&mut self) -> anyhow::Result<u64> {
+        let now = self.clocks().now()?;
+        self.recorder.record_monotonic_now(now);
+        Ok(now)
+    }
+
+    fn resolution(&mut self) -> anyhow::Result<u64> {
+        let resolution = self.clocks().resolution()?;
+        self.recorder.record_monotonic_resolution(resolution);
+        Ok(resolution)
+    }
+
+    fn subscribe_instant(
+        &mut self,
+        when: u64,
+    ) -> anyhow::Result<
+        wasmtime::component::Resource<
+            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
+        >,
+    > {
+        // Delegate to underlying WasiClocks implementation
+        self.clocks().subscribe_instant(when)
+    }
+
+    fn subscribe_duration(
+        &mut self,
+        duration: u64,
+    ) -> anyhow::Result<
+        wasmtime::component::Resource<
+            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
+        >,
+    > {
+        // Delegate to underlying WasiClocks implementation
+        self.clocks().subscribe_duration(duration)
     }
 }
 

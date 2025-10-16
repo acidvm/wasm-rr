@@ -56,7 +56,7 @@
           };
         };
 
-        examples = ["print_time" "print_args" "print_random" "fetch_quote"];
+        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num"];
 
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}
@@ -202,6 +202,7 @@
           print_time = packagesForExamples."print_time-wasm";
           print_random = packagesForExamples."print_random-wasm";
           fetch_quote = packagesForExamples."fetch_quote-wasm";
+          bench_num = packagesForExamples."bench_num-wasm";
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
           hello_haskell = hello_haskell-wasm;
