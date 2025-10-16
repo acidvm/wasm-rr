@@ -1,20 +1,24 @@
 // Enforce strict clippy lints for code quality and safety
-#![deny(clippy::unwrap_used)]
-#![deny(clippy::expect_used)]
-#![deny(clippy::panic)]
-#![deny(clippy::unreachable)]
-#![deny(clippy::todo)]
-#![deny(clippy::unimplemented)]
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented
+)]
 #![forbid(unsafe_code)]
-#![warn(clippy::dbg_macro)]
-#![warn(clippy::print_stdout)]
-#![warn(clippy::print_stderr)]
-#![warn(clippy::use_debug)]
-#![warn(clippy::exit)]
-#![warn(clippy::indexing_slicing)]
-#![warn(clippy::missing_errors_doc)]
-#![warn(clippy::missing_panics_doc)]
-#![warn(clippy::unwrap_in_result)]
+#![warn(
+    clippy::dbg_macro,
+    clippy::print_stdout,
+    clippy::print_stderr,
+    clippy::use_debug,
+    clippy::exit,
+    clippy::indexing_slicing,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::unwrap_in_result
+)]
 
 mod playback;
 mod recorder;
