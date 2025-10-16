@@ -1,9 +1,13 @@
 name: Publish to FlakeHub
 
+# Temporarily disabled - FlakeHub publishing is currently broken
+# TODO: Re-enable once publishing issues are resolved
+# on:
+#   push:
+#     branches:
+#       - main
+#   workflow_dispatch:
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
