@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 use std::time::Duration;
 
@@ -15,18 +16,47 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
-use crate::{Result, TraceEvent, TraceFile};
+use crate::{Result, TraceEvent, TraceFile, TraceFormat};
 
 pub struct Playback {
     events: VecDeque<TraceEvent>,
 }
 
 impl Playback {
-    pub fn from_file(path: &Path) -> Result<Self> {
+    pub fn from_file(path: &Path, format: TraceFormat) -> Result<Self> {
         let file = File::open(path)
             .with_context(|| format!("failed to open trace file at {}", path.display()))?;
-        let TraceFile { events } = serde_json::from_reader(file)
-            .with_context(|| format!("failed to parse trace file at {}", path.display()))?;
+        let reader = BufReader::new(file);
+
+        let events = match format {
+            TraceFormat::Json => {
+                let TraceFile { events } = serde_json::from_reader(reader).with_context(|| {
+                    format!("failed to parse JSON trace file at {}", path.display())
+                })?;
+                events
+            }
+            TraceFormat::Cbor => {
+                let mut events = Vec::new();
+                let mut reader = reader;
+                loop {
+                    match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
+                        Ok(event) => events.push(event),
+                        Err(e) => {
+                            // ciborium wraps IO errors, so we check if this is an IO error
+                            let error_str = format!("{:?}", e);
+                            if error_str.contains("UnexpectedEof") {
+                                break;
+                            }
+                            return Err(anyhow::Error::msg(format!("{}", e))).with_context(|| {
+                                format!("failed to parse CBOR trace file at {}", path.display())
+                            });
+                        }
+                    }
+                }
+                events
+            }
+        };
+
         Ok(Self {
             events: events.into(),
         })
