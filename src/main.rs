@@ -199,7 +199,13 @@ fn convert(
     output_format: TraceFormat,
 ) -> Result<()> {
     use std::fs::File;
-    use std::io::{BufReader, BufWriter, Write};
+    use std::io::{BufReader, BufWriter, ErrorKind, Write};
+
+    /// Check if a ciborium error is caused by reaching EOF.
+    /// Ciborium Error<T> enum has an Io(T) variant that wraps IO errors directly.
+    fn is_cbor_eof(err: &ciborium::de::Error<std::io::Error>) -> bool {
+        matches!(err, ciborium::de::Error::Io(io_err) if io_err.kind() == ErrorKind::UnexpectedEof)
+    }
 
     let input_file = File::open(input)
         .with_context(|| format!("failed to open input trace file at {}", input.display()))?;
@@ -218,12 +224,8 @@ fn convert(
             loop {
                 match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
                     Ok(event) => events.push(event),
+                    Err(e) if is_cbor_eof(&e) => break,
                     Err(e) => {
-                        // ciborium wraps IO errors, so we check if this is an IO error
-                        let error_str = format!("{:?}", e);
-                        if error_str.contains("UnexpectedEof") {
-                            break;
-                        }
                         return Err(anyhow::Error::msg(format!("{}", e))).with_context(|| {
                             format!("failed to parse CBOR trace file at {}", input.display())
                         });

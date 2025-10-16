@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, ErrorKind};
 use std::path::Path;
 use std::time::Duration;
 
@@ -18,8 +18,24 @@ use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
 use crate::{Result, TraceEvent, TraceFile, TraceFormat};
 
+/// Check if a ciborium error is caused by reaching EOF.
+/// Ciborium Error<T> enum has an Io(T) variant that wraps IO errors directly.
+fn is_eof_error(err: &ciborium::de::Error<std::io::Error>) -> bool {
+    match err {
+        ciborium::de::Error::Io(io_err) => io_err.kind() == ErrorKind::UnexpectedEof,
+        _ => false,
+    }
+}
+
+enum PlaybackSource {
+    /// All events loaded in memory (used for JSON traces)
+    Memory(VecDeque<TraceEvent>),
+    /// Streaming from a CBOR file
+    Stream(BufReader<File>),
+}
+
 pub struct Playback {
-    events: VecDeque<TraceEvent>,
+    source: PlaybackSource,
 }
 
 impl Playback {
@@ -28,42 +44,34 @@ impl Playback {
             .with_context(|| format!("failed to open trace file at {}", path.display()))?;
         let reader = BufReader::new(file);
 
-        let events = match format {
+        let source = match format {
             TraceFormat::Json => {
                 let TraceFile { events } = serde_json::from_reader(reader).with_context(|| {
                     format!("failed to parse JSON trace file at {}", path.display())
                 })?;
-                events
+                PlaybackSource::Memory(events.into())
             }
             TraceFormat::Cbor => {
-                let mut events = Vec::new();
-                let mut reader = reader;
-                loop {
-                    match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
-                        Ok(event) => events.push(event),
-                        Err(e) => {
-                            // ciborium wraps IO errors, so we check if this is an IO error
-                            let error_str = format!("{:?}", e);
-                            if error_str.contains("UnexpectedEof") {
-                                break;
-                            }
-                            return Err(anyhow::Error::msg(format!("{}", e))).with_context(|| {
-                                format!("failed to parse CBOR trace file at {}", path.display())
-                            });
-                        }
-                    }
-                }
-                events
+                // For CBOR, we stream events on demand instead of loading all at once
+                PlaybackSource::Stream(reader)
             }
         };
 
-        Ok(Self {
-            events: events.into(),
-        })
+        Ok(Self { source })
     }
 
     pub fn next_event(&mut self) -> Result<TraceEvent> {
-        self.events.pop_front().ok_or(anyhow!("trace exhausted"))
+        match &mut self.source {
+            PlaybackSource::Memory(events) => events.pop_front().ok_or(anyhow!("trace exhausted")),
+            PlaybackSource::Stream(reader) => {
+                match ciborium::from_reader::<TraceEvent, _>(reader) {
+                    Ok(event) => Ok(event),
+                    Err(e) if is_eof_error(&e) => Err(anyhow!("trace exhausted")),
+                    Err(e) => Err(anyhow::Error::msg(format!("{}", e)))
+                        .context("failed to read next event from CBOR trace"),
+                }
+            }
+        }
     }
 
     pub fn next_now(&mut self) -> Result<clocks::wall_clock::Datetime> {
@@ -190,14 +198,37 @@ impl Playback {
         }
     }
 
-    pub fn finish(self) -> Result<()> {
-        if self.events.is_empty() {
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "trace contains unused events: {:?}",
-                self.events.into_iter().collect::<Vec<_>>()
-            ))
+    pub fn finish(mut self) -> Result<()> {
+        match &mut self.source {
+            PlaybackSource::Memory(events) => {
+                if events.is_empty() {
+                    Ok(())
+                } else {
+                    Err(anyhow!(
+                        "trace contains unused events: {:?}",
+                        events.iter().collect::<Vec<_>>()
+                    ))
+                }
+            }
+            PlaybackSource::Stream(reader) => {
+                // For streaming, check if there are any remaining events
+                // If we hit EOF, that's good - it means we consumed everything
+                match ciborium::from_reader::<TraceEvent, _>(reader) {
+                    Ok(event) => Err(anyhow!(
+                        "trace contains unused events, starting with: {:?}",
+                        event
+                    )),
+                    Err(e) => {
+                        // EOF is expected and means success
+                        if is_eof_error(&e) {
+                            Ok(())
+                        } else {
+                            Err(anyhow::Error::msg(format!("{}", e)))
+                                .context("error while checking for remaining events in CBOR trace")
+                        }
+                    }
+                }
+            }
         }
     }
 }
