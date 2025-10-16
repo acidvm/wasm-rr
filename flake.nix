@@ -58,6 +58,72 @@
 
         examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num"];
 
+        # Fetch Javy binary from GitHub releases
+        javy = pkgs.stdenv.mkDerivation {
+          name = "javy";
+          version = "3.1.1";
+
+          src = pkgs.fetchurl {
+            url = "https://github.com/bytecodealliance/javy/releases/download/v3.1.1/javy-${
+              if pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64 then "arm-macos"
+              else if pkgs.stdenv.isDarwin then "x86_64-macos"
+              else if pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64 then "arm-linux"
+              else "x86_64-linux"
+            }-v3.1.1.gz";
+            sha256 = if pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64 then "sha256-XAS45+Av/EhTH0d1LSH2f/hRyXgb8jx2aCIyTWPSHPQ="
+              else if pkgs.stdenv.isDarwin then "sha256-5TIlnxPrN7fPZECpP6Rf9SxJWvNKV8b8NXSc3EpUTzY="
+              else if pkgs.stdenv.isLinux && pkgs.stdenv.isAarch64 then "sha256-XxkYdmDLV6T7KvZ1PZ6nWKZBCPLnj6qVZ7vKZZJQqZg="
+              else "sha256-hZHHdXKLOTRXLLFY0KZLrLzP5rMNXZWCONZPLZvJ0Rg=";
+          };
+
+          nativeBuildInputs = [ pkgs.gzip ];
+
+          unpackPhase = ''
+            gunzip -c $src > javy
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp javy $out/bin/javy
+            chmod +x $out/bin/javy
+          '';
+
+          meta = {
+            description = "JavaScript to WebAssembly toolchain";
+            homepage = "https://github.com/bytecodealliance/javy";
+            platforms = pkgs.lib.platforms.unix;
+          };
+        };
+
+        # Build JavaScript example using Javy
+        js_wordstats-wasm = pkgs.stdenv.mkDerivation {
+          name = "js_wordstats-wasm";
+          src = ./examples/js_wordstats;
+
+          nativeBuildInputs = with pkgs; [
+            javy
+            wasm-tools
+          ];
+
+          buildPhase = ''
+            # Set up HOME directory
+            export HOME=$TMPDIR
+
+            # Compile JavaScript to WASI p1 module using Javy
+            javy compile index.js -o js_wordstats_module.wasm
+
+            # Convert to WASI p2 component using adapter
+            wasm-tools component new js_wordstats_module.wasm \
+              --adapt wasi_snapshot_preview1=${wasi-adapter} \
+              -o js_wordstats.wasm
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp js_wordstats.wasm $out/
+          '';
+        };
+
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}
           examples;
@@ -206,6 +272,7 @@
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
           hello_haskell = hello_haskell-wasm;
+          js_wordstats = js_wordstats-wasm;
           counts = counts-wasm;
         };
 
@@ -230,6 +297,7 @@
             c_hello_world-wasm = c_hello_world-wasm;
             go_hello_world-wasm = go_hello_world-wasm;
             hello_haskell-wasm = hello_haskell-wasm;
+            js_wordstats-wasm = js_wordstats-wasm;
             counts-wasm = counts-wasm;
             # wasm-rr is now the default package
             default = wasm-rr;

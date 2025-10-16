@@ -10,6 +10,7 @@ set -euo pipefail
 : "${C_HELLO_WORLD_WASM:?C_HELLO_WORLD_WASM must be set}"
 : "${GO_HELLO_WORLD_WASM:?GO_HELLO_WORLD_WASM must be set}"
 : "${HELLO_HASKELL_WASM:?HELLO_HASKELL_WASM must be set}"
+: "${JS_WORDSTATS_WASM:?JS_WORDSTATS_WASM must be set}"
 : "${COUNTS_WASM:?COUNTS_WASM must be set}"
 
 resolve_wasm() {
@@ -22,6 +23,7 @@ resolve_wasm() {
     c_hello_world) printf '%s\n' "$C_HELLO_WORLD_WASM" ;;
     go_hello_world) printf '%s\n' "$GO_HELLO_WORLD_WASM" ;;
     hello_haskell) printf '%s\n' "$HELLO_HASKELL_WASM" ;;
+    js_wordstats) printf '%s\n' "$JS_WORDSTATS_WASM" ;;
     counts) printf '%s\n' "$COUNTS_WASM" ;;
     *)
       echo "unknown component: $1" >&2
