@@ -6,6 +6,7 @@ description:   A minimal Haskell program that prints "Hello, World!" compiled to
 license:       BSD-3-Clause
 author:        wasm-rr contributors
 maintainer:    wasm-rr contributors
+build-type:    Simple
 
 executable hello-haskell
   main-is:          Main.hs
