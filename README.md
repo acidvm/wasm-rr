@@ -75,7 +75,8 @@ cargo run -- replay time-bomb.wasm bug-at-1337.json
 cargo build --release
 
 # Using Nix (recommended)
-nix build .
+nix build .              # Builds wasm-rr CLI tool
+nix build .#wasm-examples  # Builds all WASM examples
 ```
 
 ### Running Examples
@@ -84,7 +85,7 @@ We include several example WASM components to play with. First, build them:
 
 ```bash
 # Build all examples with Nix
-nix build .
+nix build .#wasm-examples
 
 # Now run the examples
 # See what time the WASM component thinks it is
@@ -97,6 +98,10 @@ cargo run -- replay result/print_random.wasm
 
 # Test with arguments
 cargo run -- record result/print_args.wasm -- hello world
+
+# Or use the built wasm-rr directly
+nix build .
+./result/bin/wasm-rr record result/print_time.wasm
 ```
 
 ## How It Works

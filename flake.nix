@@ -184,7 +184,15 @@
             c_hello_world-wasm = c_hello_world-wasm;
             go_hello_world-wasm = go_hello_world-wasm;
             counts-wasm = counts-wasm;
-            default = pkgs.runCommand "wasm-examples" {} ''
+            # wasm-rr is now the default package
+            default = craneLib.buildPackage {
+              pname = "wasm-rr";
+              version = "0.1.0";
+              src = craneLib.path ./.;
+              doCheck = false;
+            };
+            # All WASM examples collected in one package
+            wasm-examples = pkgs.runCommand "wasm-examples" {} ''
               mkdir -p $out
               ${lib.concatStringsSep "\n" (
                 lib.mapAttrsToList (name: pkg:
@@ -192,12 +200,8 @@
                 ) allWasmComponents
               )}
             '';
-            wasm-rr = craneLib.buildPackage {
-              pname = "wasm-rr";
-              version = "0.1.0";
-              src = craneLib.path ./.;
-              doCheck = false;
-            };
+            # Alias for backwards compatibility
+            wasm-rr = self.packages.${system}.default;
           };
 
         checks = {
@@ -230,7 +234,7 @@
           # Golden tests
           golden-test = pkgs.runCommand "golden-test-check" {
             nativeBuildInputs = [
-              self.packages.${system}.wasm-rr
+              self.packages.${system}.default
               pkgs.python3
               pkgs.diffutils
               pkgs.findutils
@@ -238,7 +242,7 @@
             ];
           } ''
             # Set up environment variables
-            export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
+            export WASM_RR_BIN="${self.packages.${system}.default}/bin/wasm-rr"
             ${wasmEnvVars}
 
             # Copy golden fixtures to writable location
@@ -260,11 +264,11 @@
               {
                 name = "golden-fixture";
                 runtimeInputs = [
-                  self.packages.${system}.wasm-rr
+                  self.packages.${system}.default
                   pkgs.coreutils
                 ];
                 text = ''
-                  export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
+                  export WASM_RR_BIN="${self.packages.${system}.default}/bin/wasm-rr"
                   ${goldenFixtureScript}
                 '';
               };
@@ -275,14 +279,14 @@
               {
                 name = "golden-test";
                 runtimeInputs = [
-                  self.packages.${system}.wasm-rr
+                  self.packages.${system}.default
                   pkgs.python3
                   pkgs.diffutils
                   pkgs.findutils
                   pkgs.coreutils
                 ];
                 text = ''
-                  export WASM_RR_BIN="${self.packages.${system}.wasm-rr}/bin/wasm-rr"
+                  export WASM_RR_BIN="${self.packages.${system}.default}/bin/wasm-rr"
                   ${wasmEnvVars}
                   ${goldenTestScript}
                 '';
