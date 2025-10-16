@@ -148,23 +148,17 @@
           ];
 
           buildPhase = ''
-            # Set up HOME directory for cabal
+            # Set up HOME directory
             export HOME=$TMPDIR
-            mkdir -p $HOME/.cabal
 
-            # Build with wasm32-wasi-ghc
-            wasm32-wasi-cabal build
-
-            # Find the built executable
-            WASM_FILE=$(find dist-newstyle -name "hello-haskell.wasm" -type f | head -n1)
-
-            if [ -z "$WASM_FILE" ]; then
-              echo "Error: Could not find hello-haskell.wasm"
-              exit 1
-            fi
+            # Compile directly with GHC (bypassing cabal to avoid network access)
+            wasm32-wasi-ghc \
+              -o hello-haskell.wasm \
+              -O2 \
+              Main.hs
 
             # Convert to WASI p2 component using adapter
-            wasm-tools component new "$WASM_FILE" \
+            wasm-tools component new hello-haskell.wasm \
               --adapt wasi_snapshot_preview1=${wasi-adapter} \
               -o hello_haskell.wasm
           '';
