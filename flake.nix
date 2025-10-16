@@ -17,13 +17,13 @@
   };
 
   outputs = {
-    self,
     nixpkgs,
     flake-utils,
     crane,
     rust-overlay,
     advisory-db,
     ghc-wasm-meta,
+    ...
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
@@ -41,16 +41,9 @@
         examplePackages = example: let
           src = craneLib.cleanCargoSource (craneLib.path ./examples/${example});
         in {
-          # Optionally build deps first for caching
-          "${example}-artifacts" = craneLib.buildDepsOnly {
-            inherit src;
-            CARGO_BUILD_TARGET = "wasm32-wasip2";
-          };
-
           "${example}-wasm" = craneLib.buildPackage {
             name = "${example}-wasm";
             inherit src;
-            cargoArtifacts = self.packages.${system}."${example}-artifacts";
             inheritToolchain = false;
 
             CARGO_BUILD_TARGET = "wasm32-wasip2";
@@ -193,6 +186,11 @@
         goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
         goldenTestScript = builtins.readFile ./nix/golden-test.sh;
 
+        # Extract package metadata from Cargo.toml
+        cargoToml = craneLib.crateNameFromCargoToml {
+          cargoToml = ./Cargo.toml;
+        };
+
         # Build dependencies for checks
         cargoArtifacts = craneLib.buildDepsOnly {
           src = craneLib.path ./.;
@@ -210,6 +208,14 @@
           counts = counts-wasm;
         };
 
+        # Build wasm-rr CLI tool with dependency caching
+        wasm-rr = craneLib.buildPackage {
+          inherit (cargoToml) pname version;
+          src = craneLib.path ./.;
+          inherit cargoArtifacts;
+          doCheck = false;
+        };
+
         # Generate environment variables for golden tests
         wasmEnvVars = lib.concatStringsSep "\n" (
           lib.mapAttrsToList (name: pkg:
@@ -225,12 +231,7 @@
             hello_haskell-wasm = hello_haskell-wasm;
             counts-wasm = counts-wasm;
             # wasm-rr is now the default package
-            default = craneLib.buildPackage {
-              pname = "wasm-rr";
-              version = "0.1.0";
-              src = craneLib.path ./.;
-              doCheck = false;
-            };
+            default = wasm-rr;
             # All WASM examples collected in one package
             wasm-examples = pkgs.runCommand "wasm-examples" {} ''
               mkdir -p $out
@@ -241,7 +242,7 @@
               )}
             '';
             # Alias for backwards compatibility
-            wasm-rr = self.packages.${system}.default;
+            wasm-rr = wasm-rr;
           };
 
         checks = {
@@ -274,7 +275,7 @@
           # Golden tests
           golden-test = pkgs.runCommand "golden-test-check" {
             nativeBuildInputs = [
-              self.packages.${system}.default
+              wasm-rr
               pkgs.python3
               pkgs.diffutils
               pkgs.findutils
@@ -282,7 +283,7 @@
             ];
           } ''
             # Set up environment variables
-            export WASM_RR_BIN="${self.packages.${system}.default}/bin/wasm-rr"
+            export WASM_RR_BIN="${wasm-rr}/bin/wasm-rr"
             ${wasmEnvVars}
 
             # Copy golden fixtures to writable location
@@ -304,11 +305,11 @@
               {
                 name = "golden-fixture";
                 runtimeInputs = [
-                  self.packages.${system}.default
+                  wasm-rr
                   pkgs.coreutils
                 ];
                 text = ''
-                  export WASM_RR_BIN="${self.packages.${system}.default}/bin/wasm-rr"
+                  export WASM_RR_BIN="${wasm-rr}/bin/wasm-rr"
                   ${goldenFixtureScript}
                 '';
               };
@@ -319,14 +320,14 @@
               {
                 name = "golden-test";
                 runtimeInputs = [
-                  self.packages.${system}.default
+                  wasm-rr
                   pkgs.python3
                   pkgs.diffutils
                   pkgs.findutils
                   pkgs.coreutils
                 ];
                 text = ''
-                  export WASM_RR_BIN="${self.packages.${system}.default}/bin/wasm-rr"
+                  export WASM_RR_BIN="${wasm-rr}/bin/wasm-rr"
                   ${wasmEnvVars}
                   ${goldenTestScript}
                 '';
