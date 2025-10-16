@@ -186,7 +186,7 @@ where
         .context("Cannot get `run` function in `wasi:cli/run@0.2.0` interface")?;
     let func = instance
         .get_func(&mut store, func_idx)
-        .context("Failed to get function handle")?;
+        .context("Cannot get `run` function handle in `wasi:cli/run@0.2.0`")?;
     // As the `run` function in `wasi:cli/run@0.2.0` takes no argument and return a WASI result that correspond to a `Result<(), ()>`
     // Reference:
     // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
