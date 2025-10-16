@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use wasmtime::component::ResourceTable;
-use wasmtime_wasi::cli::WasiCliView as _;
+use wasmtime_wasi::cli::WasiCliView;
 use wasmtime_wasi::clocks::WasiClocksView as _;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::random::WasiRandomView as _;
@@ -21,6 +21,7 @@ use crate::{Result, TraceEvent, TraceFile};
 pub struct Recorder {
     output: PathBuf,
     events: Vec<TraceEvent>,
+    auto_save: bool,
 }
 
 impl Recorder {
@@ -28,6 +29,7 @@ impl Recorder {
         Self {
             output,
             events: Vec::new(),
+            auto_save: true,
         }
     }
 
@@ -84,9 +86,14 @@ impl Recorder {
         });
     }
 
-    pub fn save(self) -> Result<()> {
+    pub fn record_exit(&mut self, code: i32) {
+        self.events.push(TraceEvent::Exit { code });
+    }
+
+    pub fn save(mut self) -> Result<()> {
+        self.auto_save = false; // Disable auto-save since we're manually saving
         let trace = TraceFile {
-            events: self.events,
+            events: self.events.clone(), // Clone to avoid move issue
         };
 
         let file = File::create(&self.output)
@@ -96,6 +103,21 @@ impl Recorder {
             .with_context(|| format!("failed to write trace file at {}", self.output.display()))?;
 
         Ok(())
+    }
+}
+
+impl Drop for Recorder {
+    fn drop(&mut self) {
+        if self.auto_save && !self.events.is_empty() {
+            // Try to save the trace on drop, but ignore errors
+            let trace = TraceFile {
+                events: self.events.clone(),
+            };
+
+            if let Ok(file) = File::create(&self.output) {
+                let _ = serde_json::to_writer_pretty(file, &trace);
+            }
+        }
     }
 }
 
@@ -256,6 +278,21 @@ impl random::random::Host for CtxRecorder {
         let value = self.random().get_random_u64()?;
         self.recorder.record_random_u64(value);
         Ok(value)
+    }
+}
+
+impl cli::exit::Host for CtxRecorder {
+    fn exit(&mut self, status: std::result::Result<(), ()>) -> anyhow::Result<()> {
+        let code = if status.is_ok() { 0 } else { 1 };
+        self.recorder.record_exit(code);
+        // Still propagate the exit to actually terminate
+        self.cli().exit(status)
+    }
+
+    fn exit_with_code(&mut self, code: u8) -> anyhow::Result<()> {
+        self.recorder.record_exit(code as i32);
+        // Still propagate the exit to actually terminate
+        self.cli().exit_with_code(code)
     }
 }
 

@@ -8,6 +8,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use wasmtime::component::ResourceTable;
+use wasmtime_wasi::cli::WasiCliView;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::types::{
@@ -137,6 +138,13 @@ impl Playback {
                 "expected next http_response event, got {:?}",
                 other
             )),
+        }
+    }
+
+    pub fn next_exit(&mut self) -> Result<i32> {
+        match self.next_event()? {
+            TraceEvent::Exit { code } => Ok(code),
+            other => Err(anyhow!("expected next exit event, got {:?}", other)),
         }
     }
 
@@ -291,6 +299,40 @@ impl random::random::Host for CtxPlayback {
 
     fn get_random_u64(&mut self) -> anyhow::Result<u64> {
         self.playback.next_random_u64()
+    }
+}
+
+impl cli::exit::Host for CtxPlayback {
+    fn exit(&mut self, status: std::result::Result<(), ()>) -> anyhow::Result<()> {
+        let expected_code = self.playback.next_exit()?;
+        let actual_code = if status.is_ok() { 0 } else { 1 };
+
+        if expected_code != actual_code {
+            return Err(anyhow!(
+                "exit code mismatch: expected {}, got {}",
+                expected_code,
+                actual_code
+            ));
+        }
+
+        // Still propagate the exit to actually terminate
+        wasmtime_wasi::cli::WasiCliView::cli(self).exit(status)
+    }
+
+    fn exit_with_code(&mut self, code: u8) -> anyhow::Result<()> {
+        let expected_code = self.playback.next_exit()?;
+        let actual_code = code as i32;
+
+        if expected_code != actual_code {
+            return Err(anyhow!(
+                "exit code mismatch: expected {}, got {}",
+                expected_code,
+                actual_code
+            ));
+        }
+
+        // Still propagate the exit to actually terminate
+        wasmtime_wasi::cli::WasiCliView::cli(self).exit_with_code(code)
     }
 }
 

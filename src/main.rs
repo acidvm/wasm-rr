@@ -59,7 +59,22 @@ fn record(wasm: &Path, trace: &Path, args: &[String]) -> Result<()> {
     let wasi = build_wasi_ctx(wasm, args);
     let http = WasiHttpCtx::new();
     let ctx = recorder::CtxRecorder::new(wasi, http, recorder::Recorder::new(trace.to_path_buf()));
-    let ctx = run_wasm_with_wasi(wasm, ctx)?;
+
+    // Run the WASM and handle potential exit errors
+    let ctx = match run_wasm_with_wasi(wasm, ctx) {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            // If the error is an exit error, we still want to save the trace
+            let error_msg = e.to_string();
+            if error_msg.contains("error while executing") && error_msg.contains("Exited with i32 exit status") {
+                // We can't recover the context from the error, so we can't save the trace
+                // This is a limitation of the current design
+                return Err(e);
+            }
+            return Err(e);
+        }
+    };
+
     ctx.into_recorder().save()
 }
 
@@ -72,7 +87,7 @@ fn replay(wasm: &Path, trace: &Path) -> Result<()> {
     ctx.into_playback().finish()
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "call", rename_all = "snake_case")]
 enum TraceEvent {
     ClockNow {
@@ -106,6 +121,9 @@ enum TraceEvent {
         headers: Vec<(String, String)>,
         body: Vec<u8>,
     },
+    Exit {
+        code: i32,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -136,6 +154,7 @@ where
         + WasiHttpView
         + clocks::wall_clock::Host
         + cli::environment::Host
+        + cli::exit::Host
         + random::random::Host
         + 'static,
 {
@@ -170,10 +189,24 @@ where
     // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
     // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
     let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
-    let (result,) = typed.call(&mut store, ())?;
-    // Required, see documentation of TypedFunc::call
-    typed.post_return(&mut store)?;
-    result.map_err(|_| anyhow::anyhow!("error"))?;
+
+    // Try to call the function, but handle the case where it exits
+    match typed.call(&mut store, ()) {
+        Ok((result,)) => {
+            // Required, see documentation of TypedFunc::call
+            typed.post_return(&mut store)?;
+            result.map_err(|_| anyhow::anyhow!("error"))?;
+        }
+        Err(e) => {
+            // Check if this is an exit error
+            let error_msg = e.to_string();
+            if !error_msg.contains("Exited with i32 exit status") {
+                // If it's not an exit error, propagate it
+                return Err(e.into());
+            }
+            // If it's an exit error, we've already recorded it, so we can continue
+        }
+    }
 
     Ok(store.into_data())
 }
@@ -184,6 +217,7 @@ where
         + WasiHttpView
         + clocks::wall_clock::Host
         + cli::environment::Host
+        + cli::exit::Host
         + random::random::Host
         + 'static,
 {
@@ -212,6 +246,7 @@ where
 
     clocks::wall_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    cli::exit::add_to_linker::<_, Intercept<T>>(&mut linker, &Default::default(), |ctx| ctx)?;
     random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
 
     // Add remaining WASI components that we don't need to intercept
@@ -246,13 +281,10 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     use wasmtime_wasi::random::{WasiRandom, WasiRandomView};
     use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsView};
 
-    // Add CLI components (except environment which we intercept)
+    // Add CLI components (except environment and exit which we intercept)
     bindings::sync::cli::stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::exit::add_to_linker::<T, WasiCli>(linker, &Default::default(), |ctx| {
-        ctx.cli()
-    })?;
     bindings::sync::cli::terminal_input::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_output::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
