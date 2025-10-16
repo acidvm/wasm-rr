@@ -10,6 +10,10 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+    ghc-wasm-meta = {
+      url = "gitlab:haskell-wasm/ghc-wasm-meta?host=gitlab.haskell.org";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -19,6 +23,7 @@
     crane,
     rust-overlay,
     advisory-db,
+    ghc-wasm-meta,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
@@ -131,6 +136,45 @@
           '';
         };
 
+        # Build Haskell Hello World example
+        hello_haskell-wasm = pkgs.stdenv.mkDerivation {
+          name = "hello_haskell-wasm";
+          src = ./examples/hello_haskell;
+
+          nativeBuildInputs = with pkgs; [
+            wasm-tools
+          ] ++ lib.optionals (ghc-wasm-meta ? packages.${system}) [
+            ghc-wasm-meta.packages.${system}.all_9_10
+          ];
+
+          buildPhase = ''
+            # Set up HOME directory for cabal
+            export HOME=$TMPDIR
+            mkdir -p $HOME/.cabal
+
+            # Build with wasm32-wasi-ghc
+            wasm32-wasi-cabal build
+
+            # Find the built executable
+            WASM_FILE=$(find dist-newstyle -name "hello-haskell.wasm" -type f | head -n1)
+
+            if [ -z "$WASM_FILE" ]; then
+              echo "Error: Could not find hello-haskell.wasm"
+              exit 1
+            fi
+
+            # Convert to WASI p2 component using adapter
+            wasm-tools component new "$WASM_FILE" \
+              --adapt wasi_snapshot_preview1=${wasi-adapter} \
+              -o hello_haskell.wasm
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp hello_haskell.wasm $out/
+          '';
+        };
+
         # Build counts tool from GitHub release
         counts-wasm = let
           countsSrc = pkgs.fetchFromGitHub {
@@ -168,6 +212,7 @@
           fetch_quote = packagesForExamples."fetch_quote-wasm";
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
+          hello_haskell = hello_haskell-wasm;
           counts = counts-wasm;
         };
 
@@ -183,6 +228,7 @@
           // {
             c_hello_world-wasm = c_hello_world-wasm;
             go_hello_world-wasm = go_hello_world-wasm;
+            hello_haskell-wasm = hello_haskell-wasm;
             counts-wasm = counts-wasm;
             default = pkgs.runCommand "wasm-examples" {} ''
               mkdir -p $out
