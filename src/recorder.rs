@@ -189,8 +189,11 @@ impl WasiHttpView for CtxRecorder {
             body_vec.clone(),
         );
 
+        // Full<Bytes> is infallible, but we need to convert the error type to match the expected signature.
+        // We use an explicit match on Infallible rather than Into::into because ErrorCode doesn't
+        // implement From<Infallible>.
         let boxed_body = Full::new(Bytes::from(body_vec))
-            .map_err(|_| unreachable!("infallible body error"))
+            .map_err(|e: std::convert::Infallible| match e {})
             .boxed();
 
         let mut builder = hyper::Response::builder().status(parts.status);
