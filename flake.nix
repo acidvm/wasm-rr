@@ -203,11 +203,12 @@
           counts = counts-wasm;
         };
 
-        # Build wasm-rr CLI tool
+        # Build wasm-rr CLI tool with dependency caching
         wasm-rr = craneLib.buildPackage {
           pname = "wasm-rr";
           version = "0.1.0";
           src = craneLib.path ./.;
+          inherit cargoArtifacts;
           doCheck = false;
         };
 
