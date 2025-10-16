@@ -244,8 +244,9 @@ impl WasiHttpView for CtxPlayback {
             .ok_or_else(|| HttpError::trap(anyhow!("failed to access response headers")))? =
             header_map_from_pairs(&headers)?;
 
+        // Full<Bytes> is infallible, but we need to convert the error type to match the expected signature
         let boxed_body = Full::new(Bytes::from(body))
-            .map_err(|_| unreachable!("infallible body error"))
+            .map_err(|e: std::convert::Infallible| match e {})
             .boxed();
 
         let response = builder.body(boxed_body).map_err(HttpError::trap)?;

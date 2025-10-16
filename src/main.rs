@@ -1,3 +1,21 @@
+// Enforce strict clippy lints for code quality and safety
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
+#![deny(clippy::unreachable)]
+#![deny(clippy::todo)]
+#![deny(clippy::unimplemented)]
+#![forbid(unsafe_code)]
+#![warn(clippy::dbg_macro)]
+#![warn(clippy::print_stdout)]
+#![warn(clippy::print_stderr)]
+#![warn(clippy::use_debug)]
+#![warn(clippy::exit)]
+#![warn(clippy::indexing_slicing)]
+#![warn(clippy::missing_errors_doc)]
+#![warn(clippy::missing_panics_doc)]
+#![warn(clippy::unwrap_in_result)]
+
 mod playback;
 mod recorder;
 
@@ -156,15 +174,15 @@ where
     // Get the index for the exported interface
     let interface_idx = instance
         .get_export_index(&mut store, None, "wasi:cli/run@0.2.0")
-        .expect("Cannot get `wasi:cli/run@0.2.0` interface");
+        .context("Cannot get `wasi:cli/run@0.2.0` interface")?;
     // Get the index for the exported function in the exported interface
     let parent_export_idx = Some(&interface_idx);
     let func_idx = instance
         .get_export_index(&mut store, parent_export_idx, "run")
-        .expect("Cannot get `run` function in `wasi:cli/run@0.2.0` interface");
+        .context("Cannot get `run` function in `wasi:cli/run@0.2.0` interface")?;
     let func = instance
         .get_func(&mut store, func_idx)
-        .expect("Unreachable since we've got func_idx");
+        .context("Failed to get function handle")?;
     // As the `run` function in `wasi:cli/run@0.2.0` takes no argument and return a WASI result that correspond to a `Result<(), ()>`
     // Reference:
     // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
