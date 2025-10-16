@@ -20,6 +20,7 @@ use crate::{Result, TraceEvent, TraceFile};
 
 pub struct Playback {
     events: VecDeque<TraceEvent>,
+    exit_code: Option<i32>,
 }
 
 impl Playback {
@@ -30,6 +31,7 @@ impl Playback {
             .with_context(|| format!("failed to parse trace file at {}", path.display()))?;
         Ok(Self {
             events: events.into(),
+            exit_code: None,
         })
     }
 
@@ -143,14 +145,22 @@ impl Playback {
 
     pub fn next_exit(&mut self) -> Result<i32> {
         match self.next_event()? {
-            TraceEvent::Exit { code } => Ok(code),
+            TraceEvent::Exit { code } => {
+                self.exit_code = Some(code);
+                Ok(code)
+            }
             other => Err(anyhow!("expected next exit event, got {:?}", other)),
         }
     }
 
-    pub fn finish(self) -> Result<()> {
+    #[allow(dead_code)]
+    pub fn exit_code(&self) -> Option<i32> {
+        self.exit_code
+    }
+
+    pub fn finish(self) -> Result<Option<i32>> {
         if self.events.is_empty() {
-            Ok(())
+            Ok(self.exit_code)
         } else {
             Err(anyhow!(
                 "trace contains unused events: {:?}",

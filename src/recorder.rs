@@ -22,6 +22,7 @@ pub struct Recorder {
     output: PathBuf,
     events: Vec<TraceEvent>,
     auto_save: bool,
+    exit_code: Option<i32>,
 }
 
 impl Recorder {
@@ -30,6 +31,7 @@ impl Recorder {
             output,
             events: Vec::new(),
             auto_save: true,
+            exit_code: None,
         }
     }
 
@@ -88,9 +90,15 @@ impl Recorder {
 
     pub fn record_exit(&mut self, code: i32) {
         self.events.push(TraceEvent::Exit { code });
+        self.exit_code = Some(code);
     }
 
-    pub fn save(mut self) -> Result<()> {
+    #[allow(dead_code)]
+    pub fn exit_code(&self) -> Option<i32> {
+        self.exit_code
+    }
+
+    pub fn save(mut self) -> Result<Option<i32>> {
         self.auto_save = false; // Disable auto-save since we're manually saving
         let trace = TraceFile {
             events: self.events.clone(), // Clone to avoid move issue
@@ -102,7 +110,7 @@ impl Recorder {
         serde_json::to_writer_pretty(file, &trace)
             .with_context(|| format!("failed to write trace file at {}", self.output.display()))?;
 
-        Ok(())
+        Ok(self.exit_code)
     }
 }
 

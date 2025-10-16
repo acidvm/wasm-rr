@@ -59,25 +59,15 @@ fn record(wasm: &Path, trace: &Path, args: &[String]) -> Result<()> {
     let wasi = build_wasi_ctx(wasm, args);
     let http = WasiHttpCtx::new();
     let ctx = recorder::CtxRecorder::new(wasi, http, recorder::Recorder::new(trace.to_path_buf()));
+    let ctx = run_wasm_with_wasi(wasm, ctx)?;
 
-    // Run the WASM and handle potential exit errors
-    let ctx = match run_wasm_with_wasi(wasm, ctx) {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            // If the error is an exit error, we still want to save the trace
-            let error_msg = e.to_string();
-            if error_msg.contains("error while executing")
-                && error_msg.contains("Exited with i32 exit status")
-            {
-                // We can't recover the context from the error, so we can't save the trace
-                // This is a limitation of the current design
-                return Err(e);
-            }
-            return Err(e);
-        }
-    };
+    // Save the trace and get the exit code if any
+    if let Some(exit_code) = ctx.into_recorder().save()? {
+        // Exit with the recorded exit code
+        std::process::exit(exit_code);
+    }
 
-    ctx.into_recorder().save()
+    Ok(())
 }
 
 fn replay(wasm: &Path, trace: &Path) -> Result<()> {
@@ -90,21 +80,23 @@ fn replay(wasm: &Path, trace: &Path) -> Result<()> {
     let ctx = match run_wasm_with_wasi(wasm, ctx) {
         Ok(ctx) => ctx,
         Err(e) => {
-            // If the error is an exit error, we still want to verify the playback
-            let error_msg = e.to_string();
-            if error_msg.contains("error while executing")
-                && error_msg.contains("Exited with i32 exit status")
-            {
-                // We can't recover the context from the error, but for replay
-                // an exit error is expected if it was recorded
-                // Since we can't call finish(), we'll just return Ok
-                return Ok(());
+            // Check if this is an exit error using proper downcasting
+            if let Some(exit_err) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
+                // Extract the exit code from the error
+                let exit_code = exit_err.0;
+                // Exit with the same code
+                std::process::exit(exit_code);
             }
             return Err(e);
         }
     };
 
-    ctx.into_playback().finish()
+    // Finish playback and exit with the recorded code if any
+    if let Some(exit_code) = ctx.into_playback().finish()? {
+        std::process::exit(exit_code);
+    }
+
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -218,9 +210,8 @@ where
             result.map_err(|_| anyhow::anyhow!("error"))?;
         }
         Err(e) => {
-            // Check if this is an exit error
-            let error_msg = e.to_string();
-            if !error_msg.contains("Exited with i32 exit status") {
+            // Check if this is an exit error using proper downcasting
+            if e.downcast_ref::<wasmtime_wasi::I32Exit>().is_none() {
                 // If it's not an exit error, propagate it
                 return Err(e);
             }
