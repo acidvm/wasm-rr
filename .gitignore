@@ -24,3 +24,7 @@ target
 # Added by cargo
 
 /target
+
+# Nix build outputs
+result
+result-*
