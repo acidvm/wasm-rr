@@ -58,7 +58,7 @@
           };
         };
 
-        examples = ["print_time" "print_args" "print_random" "fetch_quote" "dog"];
+        examples = ["print_time" "print_args" "print_random" "fetch_quote"];
 
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}
@@ -152,6 +152,32 @@
           '';
         };
 
+        # Build dog DNS client from GitHub release
+        dog-wasm = let
+          dogSrc = pkgs.fetchFromGitHub {
+            owner = "ogham";
+            repo = "dog";
+            # Using latest commit from master since no recent releases
+            rev = "721440b12ef01a812abe5dc6ced69af6e221fad5";
+            sha256 = "sha256-GqZLhENlqPJavhMhS2ElOJ6ASBdToqW5qH8zN1RLzPo=";
+          };
+        in craneLib.buildPackage {
+          name = "dog-wasm";
+          src = dogSrc;
+
+          CARGO_BUILD_TARGET = "wasm32-wasip2";
+          doCheck = false;
+
+          # Disable TLS features for WASM compatibility
+          buildNoDefaultFeatures = true;
+          buildFeatures = ["with_idna"];
+
+          installPhase = ''
+            mkdir -p $out
+            cp target/wasm32-wasip2/release/dog.wasm $out/
+          '';
+        };
+
         goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
         goldenTestScript = builtins.readFile ./nix/golden-test.sh;
 
@@ -166,10 +192,10 @@
           print_time = packagesForExamples."print_time-wasm";
           print_random = packagesForExamples."print_random-wasm";
           fetch_quote = packagesForExamples."fetch_quote-wasm";
-          dog = packagesForExamples."dog-wasm";
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
           counts = counts-wasm;
+          dog = dog-wasm;
         };
 
         # Generate environment variables for golden tests
@@ -185,6 +211,7 @@
             c_hello_world-wasm = c_hello_world-wasm;
             go_hello_world-wasm = go_hello_world-wasm;
             counts-wasm = counts-wasm;
+            dog-wasm = dog-wasm;
             default = pkgs.runCommand "wasm-examples" {} ''
               mkdir -p $out
               ${lib.concatStringsSep "\n" (
