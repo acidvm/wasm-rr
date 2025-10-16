@@ -1,4 +1,4 @@
-bigint_multiply_fib100  time:   [48.026 ns 48.341 ns 48.420 ns]
+bigint_multiply_fib100  time:   [47.654 ns 47.722 ns 47.996 ns]
 
-bigint_fibonacci_50     time:   [1.7761 µs 1.7765 µs 1.7782 µs]
+bigint_fibonacci_50     time:   [1.7218 µs 1.7251 µs 1.7383 µs]
 
