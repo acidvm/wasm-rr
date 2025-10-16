@@ -8,7 +8,6 @@ use anyhow::Context;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use wasmtime::component::ResourceTable;
-use wasmtime_wasi::cli::WasiCliView;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::types::{
@@ -20,7 +19,6 @@ use crate::{Result, TraceEvent, TraceFile};
 
 pub struct Playback {
     events: VecDeque<TraceEvent>,
-    exit_code: Option<i32>,
 }
 
 impl Playback {
@@ -31,7 +29,6 @@ impl Playback {
             .with_context(|| format!("failed to parse trace file at {}", path.display()))?;
         Ok(Self {
             events: events.into(),
-            exit_code: None,
         })
     }
 
@@ -143,24 +140,9 @@ impl Playback {
         }
     }
 
-    pub fn next_exit(&mut self) -> Result<i32> {
-        match self.next_event()? {
-            TraceEvent::Exit { code } => {
-                self.exit_code = Some(code);
-                Ok(code)
-            }
-            other => Err(anyhow!("expected next exit event, got {:?}", other)),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn exit_code(&self) -> Option<i32> {
-        self.exit_code
-    }
-
-    pub fn finish(self) -> Result<Option<i32>> {
+    pub fn finish(self) -> Result<()> {
         if self.events.is_empty() {
-            Ok(self.exit_code)
+            Ok(())
         } else {
             Err(anyhow!(
                 "trace contains unused events: {:?}",
@@ -309,40 +291,6 @@ impl random::random::Host for CtxPlayback {
 
     fn get_random_u64(&mut self) -> anyhow::Result<u64> {
         self.playback.next_random_u64()
-    }
-}
-
-impl cli::exit::Host for CtxPlayback {
-    fn exit(&mut self, status: std::result::Result<(), ()>) -> anyhow::Result<()> {
-        let expected_code = self.playback.next_exit()?;
-        let actual_code = if status.is_ok() { 0 } else { 1 };
-
-        if expected_code != actual_code {
-            return Err(anyhow!(
-                "exit code mismatch: expected {}, got {}",
-                expected_code,
-                actual_code
-            ));
-        }
-
-        // Still propagate the exit to actually terminate
-        self.cli().exit(status)
-    }
-
-    fn exit_with_code(&mut self, code: u8) -> anyhow::Result<()> {
-        let expected_code = self.playback.next_exit()?;
-        let actual_code = code as i32;
-
-        if expected_code != actual_code {
-            return Err(anyhow!(
-                "exit code mismatch: expected {}, got {}",
-                expected_code,
-                actual_code
-            ));
-        }
-
-        // Still propagate the exit to actually terminate
-        self.cli().exit_with_code(code)
     }
 }
 

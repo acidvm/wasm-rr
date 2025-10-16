@@ -60,14 +60,7 @@ fn record(wasm: &Path, trace: &Path, args: &[String]) -> Result<()> {
     let http = WasiHttpCtx::new();
     let ctx = recorder::CtxRecorder::new(wasi, http, recorder::Recorder::new(trace.to_path_buf()));
     let ctx = run_wasm_with_wasi(wasm, ctx)?;
-
-    // Save the trace and get the exit code if any
-    if let Some(exit_code) = ctx.into_recorder().save()? {
-        // Exit with the recorded exit code
-        std::process::exit(exit_code);
-    }
-
-    Ok(())
+    ctx.into_recorder().save()
 }
 
 fn replay(wasm: &Path, trace: &Path) -> Result<()> {
@@ -75,28 +68,8 @@ fn replay(wasm: &Path, trace: &Path) -> Result<()> {
     let wasi = build_wasi_ctx(wasm, &[]);
     let http = WasiHttpCtx::new();
     let ctx = playback::CtxPlayback::new(wasi, http, playback);
-
-    // Run the WASM and handle potential exit errors (same as in record)
-    let ctx = match run_wasm_with_wasi(wasm, ctx) {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            // Check if this is an exit error using proper downcasting
-            if let Some(exit_err) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
-                // Extract the exit code from the error
-                let exit_code = exit_err.0;
-                // Exit with the same code
-                std::process::exit(exit_code);
-            }
-            return Err(e);
-        }
-    };
-
-    // Finish playback and exit with the recorded code if any
-    if let Some(exit_code) = ctx.into_playback().finish()? {
-        std::process::exit(exit_code);
-    }
-
-    Ok(())
+    let ctx = run_wasm_with_wasi(wasm, ctx)?;
+    ctx.into_playback().finish()
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -133,9 +106,6 @@ enum TraceEvent {
         headers: Vec<(String, String)>,
         body: Vec<u8>,
     },
-    Exit {
-        code: i32,
-    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -166,7 +136,6 @@ where
         + WasiHttpView
         + clocks::wall_clock::Host
         + cli::environment::Host
-        + cli::exit::Host
         + random::random::Host
         + 'static,
 {
@@ -202,22 +171,10 @@ where
     // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
     let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
 
-    // Try to call the function, but handle the case where it exits
-    match typed.call(&mut store, ()) {
-        Ok((result,)) => {
-            // Required, see documentation of TypedFunc::call
-            typed.post_return(&mut store)?;
-            result.map_err(|_| anyhow::anyhow!("error"))?;
-        }
-        Err(e) => {
-            // Check if this is an exit error using proper downcasting
-            if e.downcast_ref::<wasmtime_wasi::I32Exit>().is_none() {
-                // If it's not an exit error, propagate it
-                return Err(e);
-            }
-            // If it's an exit error, we've already recorded it, so we can continue
-        }
-    }
+    let (result,) = typed.call(&mut store, ())?;
+    // Required, see documentation of TypedFunc::call
+    typed.post_return(&mut store)?;
+    result.map_err(|_| anyhow::anyhow!("error"))?;
 
     Ok(store.into_data())
 }
@@ -228,7 +185,6 @@ where
         + WasiHttpView
         + clocks::wall_clock::Host
         + cli::environment::Host
-        + cli::exit::Host
         + random::random::Host
         + 'static,
 {
@@ -257,7 +213,6 @@ where
 
     clocks::wall_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
-    cli::exit::add_to_linker::<_, Intercept<T>>(&mut linker, &Default::default(), |ctx| ctx)?;
     random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
 
     // Add remaining WASI components that we don't need to intercept
@@ -292,10 +247,13 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     use wasmtime_wasi::random::{WasiRandom, WasiRandomView};
     use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsView};
 
-    // Add CLI components (except environment and exit which we intercept)
+    // Add CLI components (except environment which we intercept)
     bindings::sync::cli::stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
+    bindings::sync::cli::exit::add_to_linker::<T, WasiCli>(linker, &Default::default(), |ctx| {
+        ctx.cli()
+    })?;
     bindings::sync::cli::terminal_input::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_output::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
