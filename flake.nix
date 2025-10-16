@@ -162,6 +162,36 @@
           '';
         };
 
+        # Fetch pre-built Python WASM runtime
+        python-wasm-module = pkgs.fetchurl {
+          url = "https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/python%2F3.12.0%2B20231211-040d5a6/python-3.12.0.wasm";
+          sha256 = "sha256-5dxaOYsHtU6o/bUDv2j7WD1TPxDsP5MJY+ArlQX3p2M=";
+        };
+
+        # Build Python Hello World example
+        hello_python-wasm = pkgs.stdenv.mkDerivation {
+          name = "hello_python-wasm";
+          src = ./examples/hello_python;
+
+          nativeBuildInputs = with pkgs; [
+            wasm-tools
+          ];
+
+          buildPhase = ''
+            # The python-3.12.0.wasm is a WASI p1 module, convert to p2 component
+            wasm-tools component new ${python-wasm-module} \
+              --adapt wasi_snapshot_preview1=${wasi-adapter} \
+              -o hello_python.wasm
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp hello_python.wasm $out/
+            # Also copy the Python script for reference
+            cp app.py $out/
+          '';
+        };
+
         # Build counts tool from GitHub release
         counts-wasm = let
           countsSrc = pkgs.fetchFromGitHub {
@@ -206,6 +236,7 @@
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
           hello_haskell = hello_haskell-wasm;
+          hello_python = hello_python-wasm;
           counts = counts-wasm;
         };
 
@@ -230,6 +261,7 @@
             c_hello_world-wasm = c_hello_world-wasm;
             go_hello_world-wasm = go_hello_world-wasm;
             hello_haskell-wasm = hello_haskell-wasm;
+            hello_python-wasm = hello_python-wasm;
             counts-wasm = counts-wasm;
             # wasm-rr is now the default package
             default = wasm-rr;
