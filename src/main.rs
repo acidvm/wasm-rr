@@ -105,6 +105,12 @@ enum TraceEvent {
         seconds: u64,
         nanoseconds: u32,
     },
+    MonotonicClockNow {
+        nanoseconds: u64,
+    },
+    MonotonicClockResolution {
+        nanoseconds: u64,
+    },
     Environment {
         entries: Vec<(String, String)>,
     },
@@ -157,6 +163,7 @@ where
     T: WasiView
         + WasiHttpView
         + clocks::wall_clock::Host
+        + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
         + 'static,
@@ -219,6 +226,7 @@ where
     T: WasiView
         + WasiHttpView
         + clocks::wall_clock::Host
+        + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
         + 'static,
@@ -247,6 +255,7 @@ where
     }
 
     clocks::wall_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    clocks::monotonic_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
 
@@ -295,10 +304,7 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     bindings::sync::cli::terminal_stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
     bindings::sync::cli::terminal_stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
 
-    // Add clocks components (except wall-clock which we intercept)
-    bindings::sync::clocks::monotonic_clock::add_to_linker::<T, WasiClocks>(linker, |ctx| {
-        ctx.clocks()
-    })?;
+    // No clock components to add here - wall_clock and monotonic_clock are intercepted
 
     // Add filesystem components
     bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {

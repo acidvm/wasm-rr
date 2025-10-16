@@ -68,6 +68,26 @@ impl Playback {
         }
     }
 
+    pub fn next_monotonic_now(&mut self) -> Result<u64> {
+        match self.next_event()? {
+            TraceEvent::MonotonicClockNow { nanoseconds } => Ok(nanoseconds),
+            other => Err(anyhow!(
+                "expected next monotonic clock event to be 'now', got {:?}",
+                other
+            )),
+        }
+    }
+
+    pub fn next_monotonic_resolution(&mut self) -> Result<u64> {
+        match self.next_event()? {
+            TraceEvent::MonotonicClockResolution { nanoseconds } => Ok(nanoseconds),
+            other => Err(anyhow!(
+                "expected next monotonic clock event to be 'resolution', got {:?}",
+                other
+            )),
+        }
+    }
+
     pub fn next_environment(&mut self) -> Result<Vec<(String, String)>> {
         match self.next_event()? {
             TraceEvent::Environment { entries } => Ok(entries),
@@ -270,6 +290,36 @@ impl clocks::wall_clock::Host for CtxPlayback {
 
     fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
         self.playback.next_resolution()
+    }
+}
+
+impl clocks::monotonic_clock::Host for CtxPlayback {
+    fn now(&mut self) -> anyhow::Result<u64> {
+        self.playback.next_monotonic_now()
+    }
+
+    fn resolution(&mut self) -> anyhow::Result<u64> {
+        self.playback.next_monotonic_resolution()
+    }
+
+    fn subscribe_instant(
+        &mut self,
+        when: u64,
+    ) -> anyhow::Result<wasmtime::component::Resource<wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable>>
+    {
+        // Delegate to underlying WasiClocks implementation
+        use wasmtime_wasi::clocks::{HostMonotonicClock, WasiClocksView};
+        self.clocks().subscribe_instant(when)
+    }
+
+    fn subscribe_duration(
+        &mut self,
+        duration: u64,
+    ) -> anyhow::Result<wasmtime::component::Resource<wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable>>
+    {
+        // Delegate to underlying WasiClocks implementation
+        use wasmtime_wasi::clocks::{HostMonotonicClock, WasiClocksView};
+        self.clocks().subscribe_duration(duration)
     }
 }
 
