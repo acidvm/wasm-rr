@@ -4,7 +4,7 @@
 
 This document analyzes the WASM compilation compatibility of two command-line tools:
 - **xh**: HTTP client (v0.25.0) - ❌ Cannot compile to WASM
-- **dog**: DNS client (v0.2.0-pre) - ✅ Successfully compiles to WASM
+- **dog**: DNS client (v0.2.0-pre) - ❌ Cannot compile to WASM
 
 ## xh HTTP Client
 
@@ -87,57 +87,53 @@ A comprehensive port would require:
 
 ## dog DNS Client
 
-The dog DNS client (v0.2.0-pre) successfully compiles to WebAssembly when TLS features are disabled.
+The dog DNS client (v0.2.0-pre) cannot be compiled to WebAssembly due to transitive dependencies on OpenSSL.
 
-### Successful Compilation
+### Compilation Attempt
 
 Target: `wasm32-wasip2`
 Date: 2025-10-16
-dog Version: 0.2.0-pre
+dog Version: 0.2.0-pre (commit 721440b)
 
-### Build Command
+### Build Failure Details
 
-```bash
-cargo build --target wasm32-wasip2 --no-default-features
+Even with all features disabled (`--no-default-features`), the compilation fails with:
+
+```
+error: Could not find directory of OpenSSL installation
+openssl-sys = 0.9.61
 ```
 
-### Key Success Factors
+### Root Cause Analysis
 
-1. **No Native C Dependencies**: Unlike xh, dog is written in pure Rust without C dependencies
-2. **Modular Feature System**: TLS support can be disabled via cargo features
-3. **Simple Network Operations**: Basic DNS queries work well with WASI networking
+While dog itself appears to be pure Rust, its dependency tree includes crates that have transitive dependencies on OpenSSL:
 
-### Runtime Test
+1. **native-tls**: Even when optional, its presence in the dependency tree can cause issues
+2. **Transitive dependencies**: Some dependencies in the tree require OpenSSL regardless of feature flags
+3. **Build system assumptions**: The build process assumes availability of system libraries
 
-The compiled WASM binary runs successfully:
+### Attempted Workarounds
 
-```bash
-cargo run -- record examples/dog/target/wasm32-wasip2/debug/dog.wasm -- --help
-```
+1. Disabled all default features: `buildNoDefaultFeatures = true`
+2. Explicitly set empty features: `buildFeatures = []`
+3. Attempted to build with only IDNA support
 
-The binary displays help information and executes correctly in the WASM runtime.
-
-### Limitations in WASM
-
-When compiled for WASM, dog has the following limitations:
-- No TLS support (DNS-over-TLS disabled)
-- No HTTPS support (DNS-over-HTTPS disabled)
-- Network operations limited to WASI capabilities
-- No platform-specific network interface enumeration
+None of these approaches resolved the OpenSSL dependency issue.
 
 ## Conclusion
 
-This analysis demonstrates the varying levels of WASM compatibility among CLI tools:
+This analysis demonstrates the challenges of compiling existing CLI tools to WebAssembly:
 
 ### xh (HTTP Client)
-While xh is an excellent HTTP client for native platforms, its current architecture relies heavily on native system dependencies that make direct WASM compilation impossible. A WASM port would require significant refactoring to replace native dependencies with WASM-compatible alternatives, particularly the Oniguruma regex engine used for syntax highlighting.
+The xh HTTP client cannot compile to WASM due to its direct dependency on Oniguruma, a C-based regex library used by the syntect crate for syntax highlighting. This is a clear case where native C dependencies block WASM compilation.
 
 ### dog (DNS Client)
-Dog successfully compiles to WASM when non-essential features are disabled. This demonstrates that well-architected Rust applications with modular feature systems can be adapted for WASM environments. The dog WASM binary provides core DNS query functionality, making it a viable tool for WASM-based environments that need DNS resolution capabilities.
+Despite appearing to be pure Rust with optional TLS features, dog cannot compile to WASM due to transitive dependencies on OpenSSL. Even with all features disabled, the dependency tree still includes crates that require OpenSSL at build time. This highlights a more subtle compatibility issue where transitive dependencies can prevent WASM compilation.
 
 ### Key Takeaways
 
-1. **Pure Rust is WASM-Friendly**: Applications written in pure Rust without C dependencies have a much better chance of WASM compilation
-2. **Feature Flags Matter**: Modular architecture with cargo features allows disabling incompatible components
-3. **Network Operations Are Possible**: Basic networking through WASI interfaces works for simple protocols like DNS
-4. **Trade-offs Are Necessary**: WASM compatibility often requires sacrificing platform-specific features
+1. **Direct C Dependencies Are Deal-Breakers**: Tools with direct C dependencies (like xh's Oniguruma) cannot compile to WASM without replacing those dependencies
+2. **Transitive Dependencies Matter**: Even "pure Rust" projects can fail to compile if their dependencies have hidden native requirements
+3. **Feature Flags Aren't Always Enough**: Disabling features may not remove all problematic dependencies from the build graph
+4. **WASM-First Design Required**: Tools need to be designed with WASM in mind from the start, carefully vetting all dependencies
+5. **Existing Tools Need Major Refactoring**: Most existing CLI tools would require significant restructuring to become WASM-compatible
