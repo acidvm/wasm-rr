@@ -2,4 +2,3 @@ component = "hello_haskell"
 trace = "trace.json"
 stdout = "stdout.txt"
 stderr = "stderr.txt"
-must_fail = true

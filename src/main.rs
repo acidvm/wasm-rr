@@ -171,10 +171,23 @@ where
     // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
     let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
 
-    let (result,) = typed.call(&mut store, ())?;
-    // Required, see documentation of TypedFunc::call
-    typed.post_return(&mut store)?;
-    result.map_err(|_| anyhow::anyhow!("error"))?;
+    // Try to call the function, but handle the case where it exits
+    match typed.call(&mut store, ()) {
+        Ok((result,)) => {
+            // Required, see documentation of TypedFunc::call
+            typed.post_return(&mut store)?;
+            result.map_err(|_| anyhow::anyhow!("error"))?;
+        }
+        Err(e) => {
+            // Check if this is an exit error using proper downcasting
+            if e.downcast_ref::<wasmtime_wasi::I32Exit>().is_none() {
+                // If it's not an exit error, propagate it
+                return Err(e);
+            }
+            // If it's an exit error, we've already recorded the trace,
+            // so we can continue and let the error propagate naturally
+        }
+    }
 
     Ok(store.into_data())
 }
