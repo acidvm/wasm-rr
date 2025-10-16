@@ -285,7 +285,6 @@ fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
 
 fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<T>) -> Result<()> {
     use wasmtime_wasi::cli::{WasiCli, WasiCliView};
-    use wasmtime_wasi::clocks::{WasiClocks, WasiClocksView};
     use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView};
     use wasmtime_wasi::p2::bindings;
     use wasmtime_wasi::random::{WasiRandom, WasiRandomView};

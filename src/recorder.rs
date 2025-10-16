@@ -46,7 +46,8 @@ impl Recorder {
     }
 
     pub fn record_monotonic_now(&mut self, nanoseconds: u64) {
-        self.events.push(TraceEvent::MonotonicClockNow { nanoseconds });
+        self.events
+            .push(TraceEvent::MonotonicClockNow { nanoseconds });
     }
 
     pub fn record_monotonic_resolution(&mut self, nanoseconds: u64) {
@@ -239,14 +240,12 @@ impl clocks::wall_clock::Host for CtxRecorder {
 
 impl clocks::monotonic_clock::Host for CtxRecorder {
     fn now(&mut self) -> anyhow::Result<u64> {
-        use wasmtime_wasi::clocks::HostMonotonicClock;
         let now = self.clocks().now()?;
         self.recorder.record_monotonic_now(now);
         Ok(now)
     }
 
     fn resolution(&mut self) -> anyhow::Result<u64> {
-        use wasmtime_wasi::clocks::HostMonotonicClock;
         let resolution = self.clocks().resolution()?;
         self.recorder.record_monotonic_resolution(resolution);
         Ok(resolution)
@@ -255,20 +254,24 @@ impl clocks::monotonic_clock::Host for CtxRecorder {
     fn subscribe_instant(
         &mut self,
         when: u64,
-    ) -> anyhow::Result<wasmtime::component::Resource<wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable>>
-    {
+    ) -> anyhow::Result<
+        wasmtime::component::Resource<
+            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
+        >,
+    > {
         // Delegate to underlying WasiClocks implementation
-        use wasmtime_wasi::clocks::HostMonotonicClock;
         self.clocks().subscribe_instant(when)
     }
 
     fn subscribe_duration(
         &mut self,
         duration: u64,
-    ) -> anyhow::Result<wasmtime::component::Resource<wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable>>
-    {
+    ) -> anyhow::Result<
+        wasmtime::component::Resource<
+            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
+        >,
+    > {
         // Delegate to underlying WasiClocks implementation
-        use wasmtime_wasi::clocks::HostMonotonicClock;
         self.clocks().subscribe_duration(duration)
     }
 }

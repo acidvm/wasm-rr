@@ -305,20 +305,26 @@ impl clocks::monotonic_clock::Host for CtxPlayback {
     fn subscribe_instant(
         &mut self,
         when: u64,
-    ) -> anyhow::Result<wasmtime::component::Resource<wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable>>
-    {
+    ) -> anyhow::Result<
+        wasmtime::component::Resource<
+            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
+        >,
+    > {
         // Delegate to underlying WasiClocks implementation
-        use wasmtime_wasi::clocks::{HostMonotonicClock, WasiClocksView};
+        use wasmtime_wasi::clocks::WasiClocksView;
         self.clocks().subscribe_instant(when)
     }
 
     fn subscribe_duration(
         &mut self,
         duration: u64,
-    ) -> anyhow::Result<wasmtime::component::Resource<wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable>>
-    {
+    ) -> anyhow::Result<
+        wasmtime::component::Resource<
+            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
+        >,
+    > {
         // Delegate to underlying WasiClocks implementation
-        use wasmtime_wasi::clocks::{HostMonotonicClock, WasiClocksView};
+        use wasmtime_wasi::clocks::WasiClocksView;
         self.clocks().subscribe_duration(duration)
     }
 }
