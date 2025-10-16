@@ -15,10 +15,6 @@
       "args": [
         "hello_haskell.wasm"
       ]
-    },
-    {
-      "call": "exit",
-      "code": 0
     }
   ]
 }
