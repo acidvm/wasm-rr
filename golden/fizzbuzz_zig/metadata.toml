@@ -1,0 +1,4 @@
+component = "fizzbuzz_zig"
+trace = "trace.json"
+stdout = "stdout.txt"
+stderr = "stderr.txt"
