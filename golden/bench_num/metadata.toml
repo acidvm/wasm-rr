@@ -1,0 +1,4 @@
+component = "bench_num"
+trace = "trace.json"
+stdout = "stdout.txt"
+stderr = "stderr.txt"

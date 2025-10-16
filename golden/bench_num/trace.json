@@ -1,0 +1,57 @@
+{
+  "events": [
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "random_bytes",
+      "bytes": [
+        224,
+        245,
+        81,
+        179,
+        185,
+        205,
+        197,
+        9,
+        221,
+        7,
+        202,
+        24,
+        200,
+        202,
+        229,
+        233
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--quick"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--quick"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--quick"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "bench_num.wasm",
+        "--quick"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+Testing bigint_multiply_fib100
+Success
+
+Testing bigint_fibonacci_50
+Success
+
