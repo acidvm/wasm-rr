@@ -316,7 +316,7 @@ impl cli::exit::Host for CtxPlayback {
         }
 
         // Still propagate the exit to actually terminate
-        wasmtime_wasi::cli::WasiCliView::cli(self).exit(status)
+        self.cli().exit(status)
     }
 
     fn exit_with_code(&mut self, code: u8) -> anyhow::Result<()> {
@@ -332,7 +332,7 @@ impl cli::exit::Host for CtxPlayback {
         }
 
         // Still propagate the exit to actually terminate
-        wasmtime_wasi::cli::WasiCliView::cli(self).exit_with_code(code)
+        self.cli().exit_with_code(code)
     }
 }
 
