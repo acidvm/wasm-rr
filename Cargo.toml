@@ -3,10 +3,6 @@ name = "wasm-rr"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-name = "wasm_rr"
-path = "src/main.rs"
-
 [dependencies]
 wasmtime = { version = "37.0.2", features = ["component-model"] }
 wasmtime-wasi = { version = "37.0.2" }
