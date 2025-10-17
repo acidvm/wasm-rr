@@ -43,64 +43,95 @@ cargo fmt && cargo clippy --all-targets --all-features    # Lint
 - Bug fixes: Add example in `examples/`, record trace
 - Validation: `record` → `replay` parity check
 
-## Commits
+## Development Workflow
 
-Conventional Commits format:
+### 1. Create a Feature Branch
 
+Always create a new feature branch from the latest `origin/main`:
+
+```bash
+# Fetch latest changes
+git fetch origin
+
+# Create and checkout new branch from origin/main
+git checkout -b feat/your-feature-name origin/main
+# or for docs: docs/your-doc-name
+# or for fixes: fix/your-fix-name
 ```
-<type>[(<scope>)]: <description>
+
+### 2. Make Changes
+
+- Edit files as needed for your feature
+- Follow existing code patterns and style
+- Keep changes focused and atomic
+
+### 3. Test Your Changes
+
+Before committing, always test your changes:
+
+```bash
+# Run flake check to validate the Nix configuration
+nix flake check
+
+# Build the package to ensure it compiles
+nix build
+
+# Test the binary works
+./result/bin/javy --help
 ```
 
-Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
+### 4. Commit Your Changes
 
-Keep commit descriptions on points and refrain from adding "Co-authored by ..."
+Create meaningful commit messages following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format:
 
-PR requirements:
+```bash
+# Stage your changes
+git add .
 
-- Link issue
-- Validation steps + outputs
-- New traces/screenshots
-- Note breaking changes
+# Commit with a descriptive message using Conventional Commits format
+git commit -m "feat: add your feature description
 
-## Feature Plans
-
-Required sections:
-
-```markdown
-# <Feature> Plan
-
-- Summary: <one-sentence>
-- Owner: <name>
-- Last updated: <date>
-
-## Description
-
-<scope, motivation, constraints>
-
-## Success Criteria
-
-- [ ] <measurable outcome>
-
-## Resources
-
-- <specs, docs, prior art>
-
-## Risks & Mitigations
-
-- Risk: <issue> → Mitigation: <approach>
-
-## Implementation
-
-- [ ] <task with validation command>
-
-## Open Questions
-
-- <unresolved items>
-
-## Decision Log
-
-- YYYY-MM-DD — <decision> — <rationale>
+- Detail important changes
+- Explain why the change was made
+- Reference any issues if applicable"
 ```
+
+Conventional Commits format: `<type>[optional scope]: <description>`
+
+- Use lowercase for the description
+- Types: feat, fix, docs, style, refactor, test, chore, ci
+
+### 5. Push and Create Pull Request
+
+Push your branch and create a PR using GitHub CLI:
+
+```bash
+# Push your branch to remote
+git push -u origin your-branch-name
+
+# Create pull request using gh (keep it concise - focus on motivation over implementation)
+gh pr create --title "Your PR title" --body "## Motivation
+[Why is this change needed? What problem does it solve?]
+
+## Summary
+[Brief overview of the approach taken]"
+```
+
+**PR Description Guidelines:**
+
+- Keep it concise - PR descriptions become part of commit history
+- Focus on motivation and problem being solved (why this change matters)
+- Provide a brief summary of the approach, not implementation details
+- The code diff shows the implementation - don't repeat it in words
+- Testing is automated - only add a Testing section if adding new tests
+
+## Branch Naming Conventions
+
+- `feat/` - New features
+- `fix/` - Bug fixes
+- `docs/` - Documentation updates
+- `chore/` - Maintenance tasks
+- `ci/` - CI/CD related changes
 
 ## Golden Testing
 
@@ -216,31 +247,37 @@ random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |t| &mut t.inner)?
 When creating a pull request, follow this workflow:
 
 1. **Fetch latest changes from main**
+
    ```bash
    git fetch origin main
    ```
 
 2. **Create a new branch based on updated main**
+
    ```bash
    git checkout -b <descriptive-branch-name> origin/main
    ```
 
 3. **Make your changes**
+
    - Follow code standards (see § Code Standards)
    - Run tests and linting before committing
    - Write clear commit messages using Conventional Commits format
 
 4. **Create a draft PR early**
+
    ```bash
    gh pr create --draft --title "<type>: <description>" --body "Work in progress"
    ```
 
    Creating a draft PR early allows:
+
    - Early visibility of work in progress
    - CI checks to run on pushes
    - Easier collaboration and feedback
 
 5. **Continue development**
+
    - Push commits as you work
    - CI will run on each push to the PR branch
 
