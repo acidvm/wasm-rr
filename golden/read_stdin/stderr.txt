@@ -1,2 +1,1 @@
-Read 24 bytes from stdin
-Hello from stdin test\!
+

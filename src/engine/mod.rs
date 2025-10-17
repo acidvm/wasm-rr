@@ -148,8 +148,6 @@ pub fn build_wasi_ctx_with_stdin(
     } else {
         builder.inherit_stdin();
     }
-
-    // Always inherit stdout and stderr
     builder.inherit_stdout();
     builder.inherit_stderr();
 
