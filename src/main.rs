@@ -15,50 +15,28 @@
     clippy::use_debug,
     clippy::exit,
     clippy::indexing_slicing,
-    clippy::missing_errors_doc,
     clippy::missing_panics_doc,
     clippy::unwrap_in_result
 )]
+// TODO: Re-enable after adding comprehensive documentation
+#![allow(clippy::missing_errors_doc)]
 
-mod cbor_util;
+mod engine;
 mod playback;
 mod recorder;
+mod trace;
+mod util;
+mod wasi;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use wasmtime::component::{Component, Linker};
-use wasmtime::{Config, Engine, Store};
+use trace::{convert, TraceFormat};
+use wasmtime::component::Component;
+use wasmtime::Store;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::WasiView;
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TraceFormat {
-    Json,
-    Cbor,
-}
-
-impl TraceFormat {
-    fn from_path_and_option(path: &Path, format_opt: Option<&str>) -> Result<Self> {
-        if let Some(format_str) = format_opt {
-            return match format_str {
-                "json" => Ok(TraceFormat::Json),
-                "cbor" => Ok(TraceFormat::Cbor),
-                _ => bail!("unsupported format: {}", format_str),
-            };
-        }
-
-        // Infer from file extension
-        match path.extension().and_then(|s| s.to_str()) {
-            Some("json") => Ok(TraceFormat::Json),
-            Some("cbor") => Ok(TraceFormat::Cbor),
-            Some(ext) => bail!("unsupported file extension: .{}", ext),
-            None => bail!("cannot determine trace format: no file extension"),
-        }
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, propagate_version = true)]
@@ -132,48 +110,9 @@ enum Command {
     },
 }
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    match cli.command {
-        Command::Record {
-            wasm,
-            trace,
-            format,
-            args,
-        } => {
-            let format = TraceFormat::from_path_and_option(&trace, format.as_deref())?;
-            record(wasm.as_path(), trace.as_path(), format, &args)
-        }
-        Command::Replay {
-            wasm,
-            trace,
-            format,
-        } => {
-            let format = TraceFormat::from_path_and_option(&trace, format.as_deref())?;
-            replay(wasm.as_path(), trace.as_path(), format)
-        }
-        Command::Convert {
-            input,
-            output,
-            input_format,
-            output_format,
-        } => {
-            let input_format = TraceFormat::from_path_and_option(&input, input_format.as_deref())?;
-            let output_format =
-                TraceFormat::from_path_and_option(&output, output_format.as_deref())?;
-            convert(
-                input.as_path(),
-                output.as_path(),
-                input_format,
-                output_format,
-            )
-        }
-    }
-}
-
+/// Record a WASM component execution, capturing all non-deterministic host calls
 fn record(wasm: &Path, trace: &Path, format: TraceFormat, args: &[String]) -> Result<()> {
-    let wasi = build_wasi_ctx(wasm, args);
+    let wasi = engine::build_wasi_ctx(wasm, args);
     let http = WasiHttpCtx::new();
     let ctx = recorder::CtxRecorder::new(
         wasi,
@@ -184,142 +123,14 @@ fn record(wasm: &Path, trace: &Path, format: TraceFormat, args: &[String]) -> Re
     ctx.into_recorder().save()
 }
 
+/// Replay a previously recorded WASM component execution from a trace file
 fn replay(wasm: &Path, trace: &Path, format: TraceFormat) -> Result<()> {
     let playback = playback::Playback::from_file(trace, format)?;
-    let wasi = build_wasi_ctx(wasm, &[]);
+    let wasi = engine::build_wasi_ctx(wasm, &[]);
     let http = WasiHttpCtx::new();
     let ctx = playback::CtxPlayback::new(wasi, http, playback);
     let ctx = run_wasm_with_wasi(wasm, ctx)?;
     ctx.into_playback().finish()
-}
-
-fn convert(
-    input: &Path,
-    output: &Path,
-    input_format: TraceFormat,
-    output_format: TraceFormat,
-) -> Result<()> {
-    use std::fs::File;
-    use std::io::{BufReader, BufWriter, Write};
-
-    let input_file = File::open(input)
-        .with_context(|| format!("failed to open input trace file at {}", input.display()))?;
-    let reader = BufReader::new(input_file);
-
-    let events: Vec<TraceEvent> = match input_format {
-        TraceFormat::Json => {
-            let TraceFile { events } = serde_json::from_reader(reader).with_context(|| {
-                format!("failed to parse JSON trace file at {}", input.display())
-            })?;
-            events
-        }
-        TraceFormat::Cbor => {
-            let mut events = Vec::new();
-            let mut reader = reader;
-            loop {
-                match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
-                    Ok(event) => events.push(event),
-                    Err(e) if cbor_util::is_cbor_eof(&e) => break,
-                    Err(e) => {
-                        return Err(anyhow::Error::msg(format!("{}", e))).with_context(|| {
-                            format!("failed to parse CBOR trace file at {}", input.display())
-                        });
-                    }
-                }
-            }
-            events
-        }
-    };
-
-    let output_file = File::create(output)
-        .with_context(|| format!("failed to create output trace file at {}", output.display()))?;
-
-    match output_format {
-        TraceFormat::Json => {
-            let trace = TraceFile { events };
-            serde_json::to_writer_pretty(output_file, &trace).with_context(|| {
-                format!("failed to write JSON trace file at {}", output.display())
-            })?;
-        }
-        TraceFormat::Cbor => {
-            let mut writer = BufWriter::new(output_file);
-            for event in events {
-                ciborium::into_writer(&event, &mut writer).with_context(|| {
-                    format!("failed to write CBOR trace file at {}", output.display())
-                })?;
-            }
-            writer.flush().with_context(|| {
-                format!("failed to flush CBOR trace file at {}", output.display())
-            })?;
-        }
-    }
-
-    Ok(())
-}
-
-/// A single trace event recorded during execution
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(tag = "call", rename_all = "snake_case")]
-pub enum TraceEvent {
-    ClockNow {
-        seconds: u64,
-        nanoseconds: u32,
-    },
-    ClockResolution {
-        seconds: u64,
-        nanoseconds: u32,
-    },
-    MonotonicClockNow {
-        nanoseconds: u64,
-    },
-    MonotonicClockResolution {
-        nanoseconds: u64,
-    },
-    Environment {
-        entries: Vec<(String, String)>,
-    },
-    Arguments {
-        args: Vec<String>,
-    },
-    InitialCwd {
-        path: Option<String>,
-    },
-    RandomBytes {
-        bytes: Vec<u8>,
-    },
-    RandomU64 {
-        value: u64,
-    },
-    HttpResponse {
-        request_method: String,
-        request_url: String,
-        request_headers: Vec<(String, String)>,
-        status: u16,
-        headers: Vec<(String, String)>,
-        body: Vec<u8>,
-    },
-}
-
-/// A trace file containing multiple events
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct TraceFile {
-    pub events: Vec<TraceEvent>,
-}
-
-fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
-    let mut builder = WasiCtxBuilder::new();
-    builder.inherit_stdio();
-
-    let program_name = wasm_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("component");
-    builder.arg(program_name);
-    for arg in args {
-        builder.arg(arg);
-    }
-
-    builder.build()
 }
 
 fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> Result<T>
@@ -335,7 +146,7 @@ where
 {
     let wasm_path = wasm_path.as_ref();
 
-    let (engine, linker) = configure_engine_and_linker::<T>()?;
+    let (engine, linker) = engine::configure_engine_and_linker::<T>()?;
 
     let mut store = Store::new(&engine, ctx);
 
@@ -386,304 +197,42 @@ where
     Ok(store.into_data())
 }
 
-fn configure_engine_and_linker<T>() -> Result<(Engine, Linker<T>)>
-where
-    T: WasiView
-        + WasiHttpView
-        + clocks::wall_clock::Host
-        + clocks::monotonic_clock::Host
-        + cli::environment::Host
-        + random::random::Host
-        + 'static,
-{
-    // Create an engine with the component model enabled and a component linker.
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-    let engine = Engine::new(&config).context("failed to create engine with component model")?;
-    let mut linker: Linker<T> = Linker::new(&engine);
+fn main() -> Result<()> {
+    let cli = Cli::parse();
 
-    // Add HTTP components first
-    wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)
-        .context("failed to add wasi:http components")?;
-
-    // Add I/O components needed by both WASI and HTTP
-    add_wasi_io_to_linker(&mut linker)?;
-
-    // Now add the components we want to intercept using our custom implementations
-    // We need to use a wrapper type pattern to make this work with the linker
-    struct Intercept<T>(std::marker::PhantomData<T>);
-    impl<T: 'static> wasmtime::component::HasData for Intercept<T> {
-        type Data<'a>
-            = &'a mut T
-        where
-            T: 'a;
-    }
-
-    clocks::wall_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
-    clocks::monotonic_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
-    cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
-    random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
-
-    // Add remaining WASI components that we don't need to intercept
-    add_remaining_wasi_to_linker(&mut linker)?;
-
-    Ok((engine, linker))
-}
-
-fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
-    use wasmtime::component::ResourceTable;
-    use wasmtime_wasi::p2::bindings;
-
-    struct HasIo;
-    impl wasmtime::component::HasData for HasIo {
-        type Data<'a> = &'a mut ResourceTable;
-    }
-
-    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo>(linker, |t| {
-        t.ctx().table
-    })?;
-    bindings::sync::io::poll::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
-    bindings::sync::io::streams::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
-
-    Ok(())
-}
-
-fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<T>) -> Result<()> {
-    use wasmtime_wasi::cli::{WasiCli, WasiCliView};
-    use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView};
-    use wasmtime_wasi::p2::bindings;
-    use wasmtime_wasi::random::{WasiRandom, WasiRandomView};
-    use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsView};
-
-    // Add CLI components (except environment which we intercept)
-    bindings::sync::cli::stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::exit::add_to_linker::<T, WasiCli>(linker, &Default::default(), |ctx| {
-        ctx.cli()
-    })?;
-    bindings::sync::cli::terminal_input::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::terminal_output::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::terminal_stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::terminal_stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::terminal_stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-
-    // No clock components to add here - wall_clock and monotonic_clock are intercepted
-
-    // Add filesystem components
-    bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
-        ctx.filesystem()
-    })?;
-    bindings::sync::filesystem::preopens::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
-        ctx.filesystem()
-    })?;
-
-    // Add random components (except random which we intercept)
-    bindings::sync::random::insecure::add_to_linker::<T, WasiRandom>(linker, |ctx| ctx.random())?;
-    bindings::sync::random::insecure_seed::add_to_linker::<T, WasiRandom>(linker, |ctx| {
-        ctx.random()
-    })?;
-
-    // Add socket components
-    bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
-    bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;
-    bindings::sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(linker, |ctx| {
-        ctx.sockets()
-    })?;
-    bindings::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(linker, |ctx| {
-        ctx.sockets()
-    })?;
-    bindings::sockets::instance_network::add_to_linker::<T, WasiSockets>(linker, |ctx| {
-        ctx.sockets()
-    })?;
-    bindings::sockets::network::add_to_linker::<T, WasiSockets>(
-        linker,
-        &Default::default(),
-        |ctx| ctx.sockets(),
-    )?;
-    bindings::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(linker, |ctx| {
-        ctx.sockets()
-    })?;
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use quickcheck::{Arbitrary, Gen};
-    use quickcheck_macros::quickcheck;
-    use std::fs;
-    use std::io::Write;
-    use tempfile::TempDir;
-
-    // Newtype wrappers to implement Arbitrary without violating orphan rules
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct TestTraceEvent(TraceEvent);
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    struct TestTraceFile(TraceFile);
-
-    /// Generate a limited-size vector to avoid overly large test cases
-    fn arbitrary_vec_limited<T: Arbitrary>(g: &mut Gen, max_size: usize) -> Vec<T> {
-        let size = usize::arbitrary(g) % max_size.min(g.size());
-        (0..size).map(|_| T::arbitrary(g)).collect()
-    }
-
-    /// Generate a reasonable-sized string
-    fn arbitrary_string(g: &mut Gen) -> String {
-        let bytes: Vec<u8> = arbitrary_vec_limited(g, 100);
-        // Filter to valid UTF-8 or use ASCII
-        String::from_utf8(
-            bytes
-                .into_iter()
-                .filter(|&b| (32..127).contains(&b))
-                .collect(),
-        )
-        .unwrap_or_else(|_| String::from("test"))
-    }
-
-    impl Arbitrary for TestTraceEvent {
-        fn arbitrary(g: &mut Gen) -> Self {
-            let variant = u8::arbitrary(g) % 10;
-            let event = match variant {
-                0 => TraceEvent::ClockNow {
-                    seconds: u64::arbitrary(g),
-                    nanoseconds: u32::arbitrary(g) % 1_000_000_000,
-                },
-                1 => TraceEvent::ClockResolution {
-                    seconds: u64::arbitrary(g),
-                    nanoseconds: u32::arbitrary(g) % 1_000_000_000,
-                },
-                2 => TraceEvent::MonotonicClockNow {
-                    nanoseconds: u64::arbitrary(g),
-                },
-                3 => TraceEvent::MonotonicClockResolution {
-                    nanoseconds: u64::arbitrary(g),
-                },
-                4 => TraceEvent::Environment {
-                    entries: arbitrary_vec_limited(g, 10),
-                },
-                5 => TraceEvent::Arguments {
-                    args: arbitrary_vec_limited(g, 10),
-                },
-                6 => TraceEvent::InitialCwd {
-                    path: Option::<String>::arbitrary(g),
-                },
-                7 => TraceEvent::RandomBytes {
-                    bytes: arbitrary_vec_limited(g, 1024),
-                },
-                8 => TraceEvent::RandomU64 {
-                    value: u64::arbitrary(g),
-                },
-                _ => TraceEvent::HttpResponse {
-                    request_method: arbitrary_string(g),
-                    request_url: arbitrary_string(g),
-                    request_headers: arbitrary_vec_limited(g, 20),
-                    status: u16::arbitrary(g) % 600,
-                    headers: arbitrary_vec_limited(g, 20),
-                    body: arbitrary_vec_limited(g, 1024),
-                },
-            };
-            TestTraceEvent(event)
+    match cli.command {
+        Command::Record {
+            wasm,
+            trace,
+            format,
+            args,
+        } => {
+            let format = TraceFormat::from_path_and_option(&trace, format.as_deref())?;
+            record(wasm.as_path(), trace.as_path(), format, &args)
         }
-    }
-
-    impl Arbitrary for TestTraceFile {
-        fn arbitrary(g: &mut Gen) -> Self {
-            TestTraceFile(TraceFile {
-                events: arbitrary_vec_limited::<TestTraceEvent>(g, 50)
-                    .into_iter()
-                    .map(|TestTraceEvent(e)| e)
-                    .collect(),
-            })
+        Command::Replay {
+            wasm,
+            trace,
+            format,
+        } => {
+            let format = TraceFormat::from_path_and_option(&trace, format.as_deref())?;
+            replay(wasm.as_path(), trace.as_path(), format)
         }
-    }
-
-    #[quickcheck]
-    fn roundtrip_json_to_cbor_to_json(test_trace: TestTraceFile) -> Result<bool, String> {
-        let TestTraceFile(trace) = test_trace;
-        let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-
-        // Write original trace as JSON
-        let json_path = temp_dir.path().join("original.json");
-        let json_file = fs::File::create(&json_path)
-            .map_err(|e| format!("Failed to create JSON file: {}", e))?;
-        serde_json::to_writer_pretty(&json_file, &trace)
-            .map_err(|e| format!("Failed to write JSON: {}", e))?;
-
-        // Convert JSON to CBOR using the convert function directly
-        let cbor_path = temp_dir.path().join("converted.cbor");
-        convert(&json_path, &cbor_path, TraceFormat::Json, TraceFormat::Cbor)
-            .map_err(|e| format!("Failed to convert JSON to CBOR: {}", e))?;
-
-        // Convert CBOR back to JSON using the convert function directly
-        let json2_path = temp_dir.path().join("roundtrip.json");
-        convert(
-            &cbor_path,
-            &json2_path,
-            TraceFormat::Cbor,
-            TraceFormat::Json,
-        )
-        .map_err(|e| format!("Failed to convert CBOR to JSON: {}", e))?;
-
-        // Read the roundtrip JSON
-        let json2_file = fs::File::open(&json2_path)
-            .map_err(|e| format!("Failed to open roundtrip JSON: {}", e))?;
-        let trace2: TraceFile = serde_json::from_reader(&json2_file)
-            .map_err(|e| format!("Failed to parse roundtrip JSON: {}", e))?;
-
-        // Compare
-        Ok(trace == trace2)
-    }
-
-    #[quickcheck]
-    fn roundtrip_cbor_to_json_to_cbor(test_trace: TestTraceFile) -> Result<bool, String> {
-        let TestTraceFile(trace) = test_trace;
-        let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-
-        // Write original trace as CBOR
-        let cbor_path = temp_dir.path().join("original.cbor");
-        let mut cbor_file = fs::File::create(&cbor_path)
-            .map_err(|e| format!("Failed to create CBOR file: {}", e))?;
-        for event in &trace.events {
-            ciborium::into_writer(event, &mut cbor_file)
-                .map_err(|e| format!("Failed to write CBOR: {}", e))?;
+        Command::Convert {
+            input,
+            output,
+            input_format,
+            output_format,
+        } => {
+            let input_format = TraceFormat::from_path_and_option(&input, input_format.as_deref())?;
+            let output_format =
+                TraceFormat::from_path_and_option(&output, output_format.as_deref())?;
+            convert(
+                input.as_path(),
+                output.as_path(),
+                input_format,
+                output_format,
+            )
         }
-        cbor_file
-            .flush()
-            .map_err(|e| format!("Failed to flush CBOR: {}", e))?;
-
-        // Convert CBOR to JSON using the convert function directly
-        let json_path = temp_dir.path().join("converted.json");
-        convert(&cbor_path, &json_path, TraceFormat::Cbor, TraceFormat::Json)
-            .map_err(|e| format!("Failed to convert CBOR to JSON: {}", e))?;
-
-        // Convert JSON back to CBOR using the convert function directly
-        let cbor2_path = temp_dir.path().join("roundtrip.cbor");
-        convert(
-            &json_path,
-            &cbor2_path,
-            TraceFormat::Json,
-            TraceFormat::Cbor,
-        )
-        .map_err(|e| format!("Failed to convert JSON to CBOR: {}", e))?;
-
-        // Read the roundtrip CBOR
-        let cbor2_file = fs::File::open(&cbor2_path)
-            .map_err(|e| format!("Failed to open roundtrip CBOR: {}", e))?;
-        let mut reader = std::io::BufReader::new(cbor2_file);
-        let mut events2 = Vec::new();
-        loop {
-            match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
-                Ok(event) => events2.push(event),
-                Err(e) if cbor_util::is_cbor_eof(&e) => break,
-                Err(e) => return Err(format!("Failed to read CBOR: {}", e)),
-            }
-        }
-        let trace2 = TraceFile { events: events2 };
-
-        // Compare
-        Ok(trace == trace2)
     }
 }

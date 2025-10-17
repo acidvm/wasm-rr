@@ -16,8 +16,10 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
-use crate::cbor_util::is_cbor_eof;
-use crate::{Result, TraceEvent, TraceFile, TraceFormat};
+use crate::trace::{TraceEvent, TraceFile, TraceFormat};
+use crate::util::cbor::is_cbor_eof;
+use crate::wasi::util::{header_map_from_pairs, sorted_headers};
+use anyhow::Result;
 
 enum PlaybackSource {
     /// All events loaded in memory (used for JSON traces)
@@ -404,32 +406,4 @@ impl random::random::Host for CtxPlayback {
     fn get_random_u64(&mut self) -> anyhow::Result<u64> {
         self.playback.next_random_u64()
     }
-}
-
-fn sorted_headers(
-    headers: &hyper::HeaderMap,
-) -> wasmtime_wasi_http::HttpResult<Vec<(String, String)>> {
-    let mut pairs = Vec::new();
-    for (name, value) in headers.iter() {
-        let value = value
-            .to_str()
-            .map_err(|err| HttpError::trap(anyhow!("invalid header value for {}: {err}", name)))?;
-        pairs.push((name.as_str().to_string(), value.to_string()));
-    }
-    pairs.sort();
-    Ok(pairs)
-}
-
-fn header_map_from_pairs(
-    pairs: &[(String, String)],
-) -> wasmtime_wasi_http::HttpResult<hyper::HeaderMap> {
-    let mut map = hyper::HeaderMap::new();
-    for (name, value) in pairs {
-        let header_name = hyper::header::HeaderName::from_bytes(name.as_bytes())
-            .map_err(|err| HttpError::trap(anyhow!("invalid header name {name}: {err}")))?;
-        let header_value = hyper::header::HeaderValue::from_str(value)
-            .map_err(|err| HttpError::trap(anyhow!("invalid header value for {name}: {err}")))?;
-        map.append(header_name, header_value);
-    }
-    Ok(map)
 }
