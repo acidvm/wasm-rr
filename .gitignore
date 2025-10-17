@@ -28,3 +28,7 @@ target
 # Nix build outputs
 result
 result-*
+
+# mdBook generated documentation
+docs/book
+book
