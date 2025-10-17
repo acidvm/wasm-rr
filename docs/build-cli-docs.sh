@@ -5,7 +5,7 @@ set -euo pipefail
 # This script should be run before building the mdBook documentation
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT_FILE="${SCRIPT_DIR}/src/cli-reference.md"
+OUTPUT_FILE="${SCRIPT_DIR}/src/cli-reference-generated.md"
 
 # Generate markdown using the hidden --markdown-help flag
 cargo run --release -- --markdown-help > "${OUTPUT_FILE}"

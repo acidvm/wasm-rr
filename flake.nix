@@ -335,7 +335,7 @@
 
           buildPhase = ''
             # Generate CLI reference documentation
-            ${wasm-rr}/bin/wasm-rr --markdown-help > docs/src/cli-reference.md
+            ${wasm-rr}/bin/wasm-rr --markdown-help > docs/src/cli-reference-generated.md
 
             # Build the documentation
             cd docs

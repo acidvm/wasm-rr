@@ -221,9 +221,9 @@ fn main() -> Result<()> {
     }
 
     let Some(command) = cli.command else {
-        // No subcommand provided, print help
+        // No subcommand provided, print help and exit with error
         Cli::command().print_help()?;
-        return Ok(());
+        std::process::exit(1);
     };
 
     match command {
