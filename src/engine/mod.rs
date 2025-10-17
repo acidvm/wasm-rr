@@ -134,12 +134,7 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     Ok(())
 }
 
-/// Build a WASI context for a given WASM component
-pub fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
-    build_wasi_ctx_with_stdin(wasm_path, args, None)
-}
-
-/// Build a WASI context with optional custom stdin
+/// Build a WASI context for a given WASM component with optional custom stdin
 pub fn build_wasi_ctx_with_stdin(
     wasm_path: &Path,
     args: &[String],
