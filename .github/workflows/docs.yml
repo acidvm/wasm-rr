@@ -33,27 +33,23 @@ jobs:
         if: github.event.action != 'closed'
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Generate CLI reference documentation
-        if: github.event.action != 'closed'
-        run: |
-          nix develop --command bash -c "./docs/build-cli-docs.sh"
-
       - name: Build documentation
         if: github.event.action != 'closed'
         run: |
-          nix develop --command bash -c "cd docs && mdbook build"
+          nix build .#docs
+          cp -r result docs-output
 
       - name: Upload artifact
         if: github.event.action != 'closed'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./docs/book
+          path: ./docs-output
 
       - name: Deploy PR preview
         if: github.event_name == 'pull_request'
         uses: rossjrw/pr-preview-action@v1
         with:
-          source-dir: ./docs/book
+          source-dir: ./docs-output
 
   deploy:
     # Only deploy on main branch pushes

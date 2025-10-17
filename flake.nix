@@ -471,30 +471,6 @@
               };
           };
         };
-
-        devShells.default = pkgs.mkShell {
-          inputsFrom = [ cargoArtifacts ];
-          nativeBuildInputs = with pkgs; [
-            # Rust toolchain
-            rustWithWasmTarget
-
-            # Documentation tools
-            mdbook
-            mdbook-linkcheck
-
-            # Development tools
-            cargo-watch
-            rust-analyzer
-          ];
-
-          shellHook = ''
-            echo "wasm-rr development environment"
-            echo "- cargo build: Build the project"
-            echo "- cargo test: Run tests"
-            echo "- cd docs && mdbook serve: Serve documentation locally"
-            echo "- ./docs/build-cli-docs.sh: Regenerate CLI reference"
-          '';
-        };
       }
     );
 }
