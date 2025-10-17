@@ -322,6 +322,32 @@
           doCheck = false;
         };
 
+        # Build mdBook documentation
+        wasm-rr-docs = pkgs.stdenv.mkDerivation {
+          name = "wasm-rr-docs";
+          src = ./.;
+
+          nativeBuildInputs = with pkgs; [
+            mdbook
+            mdbook-linkcheck
+            wasm-rr
+          ];
+
+          buildPhase = ''
+            # Generate CLI reference documentation
+            ${wasm-rr}/bin/wasm-rr --markdown-help > docs/src/cli-reference.md
+
+            # Build the documentation
+            cd docs
+            mdbook build
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp -r book/* $out/
+          '';
+        };
+
         # Generate environment variables for golden tests
         wasmEnvVars = lib.concatStringsSep "\n" (
           lib.mapAttrsToList (name: pkg:
@@ -352,6 +378,8 @@
             '';
             # Alias for backwards compatibility
             wasm-rr = wasm-rr;
+            # Documentation
+            docs = wasm-rr-docs;
           };
 
         checks = {

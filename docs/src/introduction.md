@@ -54,6 +54,4 @@ wasm-rr record my-app.wasm -t failure.json -- --config test
 
 ## Next Steps
 
-- [Getting Started](./getting-started.md) – Installation and first steps
-- [Recording & Replaying](./recording-replaying.md) – Detailed usage guide
-- [Limitations](./limitations.md) – Known limitations and workarounds
+- [CLI Reference](./cli-reference.md) – Complete command-line reference
