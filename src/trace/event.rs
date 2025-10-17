@@ -41,4 +41,7 @@ pub enum TraceEvent {
         headers: Vec<(String, String)>,
         body: Vec<u8>,
     },
+    StdinRead {
+        bytes: Vec<u8>,
+    },
 }

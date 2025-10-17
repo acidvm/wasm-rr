@@ -112,21 +112,31 @@ enum Command {
 
 /// Record a WASM component execution, capturing all non-deterministic host calls
 fn record(wasm: &Path, trace: &Path, format: TraceFormat, args: &[String]) -> Result<()> {
-    let wasi = engine::build_wasi_ctx(wasm, args);
+    // Read all stdin data upfront so we can record it
+    let stdin_data = wasi::stdin::read_all_stdin().context("failed to read stdin")?;
+
+    let wasi = engine::build_wasi_ctx_with_stdin(wasm, args, Some(stdin_data.clone()));
     let http = WasiHttpCtx::new();
-    let ctx = recorder::CtxRecorder::new(
-        wasi,
-        http,
-        recorder::Recorder::new(trace.to_path_buf(), format),
-    );
+    let mut recorder = recorder::Recorder::new(trace.to_path_buf(), format);
+
+    // Record stdin data
+    if !stdin_data.is_empty() {
+        recorder.record_stdin_read(stdin_data);
+    }
+
+    let ctx = recorder::CtxRecorder::new(wasi, http, recorder);
     let ctx = run_wasm_with_wasi(wasm, ctx)?;
     ctx.into_recorder().save()
 }
 
 /// Replay a previously recorded WASM component execution from a trace file
 fn replay(wasm: &Path, trace: &Path, format: TraceFormat) -> Result<()> {
-    let playback = playback::Playback::from_file(trace, format)?;
-    let wasi = engine::build_wasi_ctx(wasm, &[]);
+    let mut playback = playback::Playback::from_file(trace, format)?;
+
+    // Try to get stdin data from the first event if it exists
+    let stdin_data = playback.peek_stdin_read()?;
+
+    let wasi = engine::build_wasi_ctx_with_stdin(wasm, &[], stdin_data);
     let http = WasiHttpCtx::new();
     let ctx = playback::CtxPlayback::new(wasi, http, playback);
     let ctx = run_wasm_with_wasi(wasm, ctx)?;

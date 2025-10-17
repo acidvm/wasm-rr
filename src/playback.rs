@@ -164,6 +164,39 @@ impl Playback {
         }
     }
 
+    /// Peek at the first event to see if it's a stdin read, without consuming other events
+    pub fn peek_stdin_read(&mut self) -> Result<Option<Vec<u8>>> {
+        match &mut self.source {
+            PlaybackSource::Memory(events) => {
+                if let Some(TraceEvent::StdinRead { bytes: _ }) = events.front() {
+                    // Remove and return the stdin event
+                    if let Some(TraceEvent::StdinRead { bytes }) = events.pop_front() {
+                        return Ok(Some(bytes));
+                    }
+                }
+                Ok(None)
+            }
+            PlaybackSource::Stream(reader) => {
+                // For CBOR, we need to peek at the first event
+                // Since we can't easily peek with ciborium, we'll try to read it
+                match ciborium::from_reader::<TraceEvent, _>(reader) {
+                    Ok(TraceEvent::StdinRead { bytes }) => Ok(Some(bytes)),
+                    Ok(other) => {
+                        // Put it back by creating a new error - actually, we can't put it back easily
+                        // For now, let's assume stdin is always first if present, and error if not
+                        Err(anyhow!(
+                            "expected stdin_read as first event for replay, got {:?}",
+                            other
+                        ))
+                    }
+                    Err(e) if is_cbor_eof(&e) => Ok(None),
+                    Err(e) => Err(anyhow::Error::msg(format!("{}", e)))
+                        .context("failed to read first event from CBOR trace"),
+                }
+            }
+        }
+    }
+
     fn next_http_response(&mut self) -> Result<(RecordedHttpRequest, RecordedHttpResponse)> {
         match self.next_event()? {
             TraceEvent::HttpResponse {

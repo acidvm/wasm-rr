@@ -159,6 +159,10 @@ impl Recorder {
         self.write_event(TraceEvent::RandomU64 { value });
     }
 
+    pub fn record_stdin_read(&mut self, bytes: Vec<u8>) {
+        self.write_event(TraceEvent::StdinRead { bytes });
+    }
+
     pub fn record_http_response(
         &mut self,
         request_method: String,

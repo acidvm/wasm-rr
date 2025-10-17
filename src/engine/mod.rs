@@ -3,6 +3,7 @@ use std::path::Path;
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::pipe::MemoryInputPipe;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::WasiHttpView;
 
@@ -135,8 +136,27 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
 
 /// Build a WASI context for a given WASM component
 pub fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
+    build_wasi_ctx_with_stdin(wasm_path, args, None)
+}
+
+/// Build a WASI context with optional custom stdin
+pub fn build_wasi_ctx_with_stdin(
+    wasm_path: &Path,
+    args: &[String],
+    stdin_data: Option<Vec<u8>>,
+) -> WasiCtx {
     let mut builder = WasiCtxBuilder::new();
-    builder.inherit_stdio();
+
+    // Set up stdin based on whether we have recorded data
+    if let Some(data) = stdin_data {
+        builder.stdin(MemoryInputPipe::new(data));
+    } else {
+        builder.inherit_stdin();
+    }
+
+    // Always inherit stdout and stderr
+    builder.inherit_stdout();
+    builder.inherit_stderr();
 
     let program_name = wasm_path
         .file_name()

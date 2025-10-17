@@ -61,7 +61,7 @@
           };
         };
 
-        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num"];
+        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num" "read_stdin"];
 
         # Use Javy from the javy.nix flake
         javy = javy-flake.packages.${system}.default;
@@ -305,6 +305,7 @@
           print_random = packagesForExamples."print_random-wasm";
           fetch_quote = packagesForExamples."fetch_quote-wasm";
           bench_num = packagesForExamples."bench_num-wasm";
+          read_stdin = packagesForExamples."read_stdin-wasm";
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
           hello_haskell = hello_haskell-wasm;
