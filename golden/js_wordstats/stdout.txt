@@ -1,0 +1,35 @@
+🎯 JavaScript Word Statistics Analyzer
+==================================================
+
+📊 Summary:
+   Total words: 39
+   Unique words: 30
+   Avg length: 6.33 chars
+
+📈 Word Frequencies (Top 10):
+  javascript        5 ████████████████████ 100.0%
+  programming       3 ████████████ 60.0%
+  and               3 ████████████ 60.0%
+  is                2 ████████ 40.0%
+  a                 1 ████ 20.0%
+  versatile         1 ████ 20.0%
+  language          1 ████ 20.0%
+  supports          1 ████ 20.0%
+  functional        1 ████ 20.0%
+  objectoriented    1 ████ 20.0%
+
+🔤 Word Length Distribution:
+   1 chars: ▓ (1)
+   2 chars: ▓▓▓ (3)
+   3 chars: ▓▓▓▓▓▓▓ (7)
+   4 chars: ▓▓▓▓ (4)
+   5 chars: ▓ (1)
+   6 chars: ▓ (1)
+   7 chars: ▓▓ (2)
+   8 chars: ▓▓▓ (3)
+   9 chars: ▓▓ (2)
+   10 chars: ▓▓▓ (3)
+   11 chars: ▓▓ (2)
+   14 chars: ▓ (1)
+
+✨ Analysis complete!

@@ -17,7 +17,9 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
-use crate::{Result, TraceEvent, TraceFormat};
+use crate::trace::{TraceEvent, TraceFormat};
+use crate::wasi::util::sorted_headers;
+use anyhow::Result;
 
 enum TraceWriter {
     Json {
@@ -387,18 +389,4 @@ impl random::random::Host for CtxRecorder {
         self.recorder.record_random_u64(value);
         Ok(value)
     }
-}
-
-fn sorted_headers(
-    headers: &hyper::HeaderMap,
-) -> wasmtime_wasi_http::HttpResult<Vec<(String, String)>> {
-    let mut pairs = Vec::new();
-    for (name, value) in headers.iter() {
-        let value = value
-            .to_str()
-            .map_err(|err| HttpError::trap(anyhow!("invalid header value for {}: {err}", name)))?;
-        pairs.push((name.as_str().to_string(), value.to_string()));
-    }
-    pairs.sort();
-    Ok(pairs)
 }
