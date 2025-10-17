@@ -98,7 +98,7 @@ PY
 
   stdin_file="$(get_stdin_file "$component")"
   if [[ -n "$stdin_file" ]] && [[ -f "$stdin_file" ]]; then
-    if ! cat "$stdin_file" | "$WASM_RR_BIN" replay "$wasm_path" "$trace_file" >"$actual_stdout" 2>"$actual_stderr"; then
+    if ! "$WASM_RR_BIN" replay "$wasm_path" "$trace_file" <"$stdin_file" >"$actual_stdout" 2>"$actual_stderr"; then
       echo "replay failed for $label" >&2
       cat "$actual_stderr" >&2 || true
       fixture_fail=1
