@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{BufReader, ErrorKind};
+use std::io::BufReader;
 use std::path::Path;
 use std::time::Duration;
 
@@ -16,16 +16,8 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
+use crate::cbor_util::is_cbor_eof;
 use crate::{Result, TraceEvent, TraceFile, TraceFormat};
-
-/// Check if a ciborium error is caused by reaching EOF.
-/// Ciborium Error<T> enum has an Io(T) variant that wraps IO errors directly.
-fn is_eof_error(err: &ciborium::de::Error<std::io::Error>) -> bool {
-    match err {
-        ciborium::de::Error::Io(io_err) => io_err.kind() == ErrorKind::UnexpectedEof,
-        _ => false,
-    }
-}
 
 enum PlaybackSource {
     /// All events loaded in memory (used for JSON traces)
@@ -66,7 +58,7 @@ impl Playback {
             PlaybackSource::Stream(reader) => {
                 match ciborium::from_reader::<TraceEvent, _>(reader) {
                     Ok(event) => Ok(event),
-                    Err(e) if is_eof_error(&e) => Err(anyhow!("trace exhausted")),
+                    Err(e) if is_cbor_eof(&e) => Err(anyhow!("trace exhausted")),
                     Err(e) => Err(anyhow::Error::msg(format!("{}", e)))
                         .context("failed to read next event from CBOR trace"),
                 }
@@ -220,7 +212,7 @@ impl Playback {
                     )),
                     Err(e) => {
                         // EOF is expected and means success
-                        if is_eof_error(&e) {
+                        if is_cbor_eof(&e) {
                             Ok(())
                         } else {
                             Err(anyhow::Error::msg(format!("{}", e)))

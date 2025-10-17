@@ -20,6 +20,7 @@
     clippy::unwrap_in_result
 )]
 
+mod cbor_util;
 mod playback;
 mod recorder;
 
@@ -199,13 +200,7 @@ fn convert(
     output_format: TraceFormat,
 ) -> Result<()> {
     use std::fs::File;
-    use std::io::{BufReader, BufWriter, ErrorKind, Write};
-
-    /// Check if a ciborium error is caused by reaching EOF.
-    /// Ciborium Error<T> enum has an Io(T) variant that wraps IO errors directly.
-    fn is_cbor_eof(err: &ciborium::de::Error<std::io::Error>) -> bool {
-        matches!(err, ciborium::de::Error::Io(io_err) if io_err.kind() == ErrorKind::UnexpectedEof)
-    }
+    use std::io::{BufReader, BufWriter, Write};
 
     let input_file = File::open(input)
         .with_context(|| format!("failed to open input trace file at {}", input.display()))?;
@@ -224,7 +219,7 @@ fn convert(
             loop {
                 match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
                     Ok(event) => events.push(event),
-                    Err(e) if is_cbor_eof(&e) => break,
+                    Err(e) if cbor_util::is_cbor_eof(&e) => break,
                     Err(e) => {
                         return Err(anyhow::Error::msg(format!("{}", e))).with_context(|| {
                             format!("failed to parse CBOR trace file at {}", input.display())
@@ -693,14 +688,8 @@ mod tests {
         loop {
             match ciborium::from_reader::<TraceEvent, _>(&mut reader) {
                 Ok(event) => events2.push(event),
-                Err(e) => {
-                    // Check for EOF
-                    if matches!(e, ciborium::de::Error::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::UnexpectedEof)
-                    {
-                        break;
-                    }
-                    return Err(format!("Failed to read CBOR: {}", e));
-                }
+                Err(e) if cbor_util::is_cbor_eof(&e) => break,
+                Err(e) => return Err(format!("Failed to read CBOR: {}", e)),
             }
         }
         let trace2 = TraceFile { events: events2 };
