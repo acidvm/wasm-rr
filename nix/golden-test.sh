@@ -11,6 +11,7 @@ set -euo pipefail
 : "${GO_HELLO_WORLD_WASM:?GO_HELLO_WORLD_WASM must be set}"
 : "${HELLO_HASKELL_WASM:?HELLO_HASKELL_WASM must be set}"
 : "${HELLO_PYTHON_WASM:?HELLO_PYTHON_WASM must be set}"
+: "${FIZZBUZZ_ZIG_WASM:?FIZZBUZZ_ZIG_WASM must be set}"
 : "${COUNTS_WASM:?COUNTS_WASM must be set}"
 
 resolve_wasm() {
@@ -24,6 +25,7 @@ resolve_wasm() {
     go_hello_world) printf '%s\n' "$GO_HELLO_WORLD_WASM" ;;
     hello_haskell) printf '%s\n' "$HELLO_HASKELL_WASM" ;;
     hello_python) printf '%s\n' "$HELLO_PYTHON_WASM" ;;
+    fizzbuzz_zig) printf '%s\n' "$FIZZBUZZ_ZIG_WASM" ;;
     counts) printf '%s\n' "$COUNTS_WASM" ;;
     *)
       echo "unknown component: $1" >&2

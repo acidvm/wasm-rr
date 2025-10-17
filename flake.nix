@@ -192,6 +192,41 @@
           '';
         };
 
+        # Build Zig FizzBuzz example
+        fizzbuzz_zig-wasm = pkgs.stdenv.mkDerivation {
+          name = "fizzbuzz_zig-wasm";
+          src = ./examples/fizzbuzz_zig;
+
+          nativeBuildInputs = with pkgs; [
+            zig
+            wasm-tools
+          ];
+
+          buildPhase = ''
+            # Set up Zig cache directory
+            export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
+            mkdir -p $ZIG_GLOBAL_CACHE_DIR
+
+            # Compile Zig to WASI p1 module
+            zig build-exe \
+              -target wasm32-wasi \
+              -O ReleaseSmall \
+              -fno-entry \
+              -rdynamic \
+              main.zig
+
+            # Convert to WASI p2 component using adapter
+            wasm-tools component new main.wasm \
+              --adapt wasi_snapshot_preview1=${wasi-adapter} \
+              -o fizzbuzz_zig.wasm
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            cp fizzbuzz_zig.wasm $out/
+          '';
+        };
+
         # Build counts tool from GitHub release
         counts-wasm = let
           countsSrc = pkgs.fetchFromGitHub {
@@ -237,6 +272,7 @@
           go_hello_world = go_hello_world-wasm;
           hello_haskell = hello_haskell-wasm;
           hello_python = hello_python-wasm;
+          fizzbuzz_zig = fizzbuzz_zig-wasm;
           counts = counts-wasm;
         };
 
@@ -262,6 +298,7 @@
             go_hello_world-wasm = go_hello_world-wasm;
             hello_haskell-wasm = hello_haskell-wasm;
             hello_python-wasm = hello_python-wasm;
+            fizzbuzz_zig-wasm = fizzbuzz_zig-wasm;
             counts-wasm = counts-wasm;
             # wasm-rr is now the default package
             default = wasm-rr;
