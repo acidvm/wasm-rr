@@ -511,7 +511,6 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_cmd::Command;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use std::fs;
@@ -613,25 +612,20 @@ mod tests {
         serde_json::to_writer_pretty(&json_file, &trace)
             .map_err(|e| format!("Failed to write JSON: {}", e))?;
 
-        // Convert JSON to CBOR
+        // Convert JSON to CBOR using the convert function directly
         let cbor_path = temp_dir.path().join("converted.cbor");
-        Command::cargo_bin("wasm-rr")
-            .map_err(|e| format!("Failed to find binary: {}", e))?
-            .arg("convert")
-            .arg(&json_path)
-            .arg(&cbor_path)
-            .assert()
-            .success();
+        convert(&json_path, &cbor_path, TraceFormat::Json, TraceFormat::Cbor)
+            .map_err(|e| format!("Failed to convert JSON to CBOR: {}", e))?;
 
-        // Convert CBOR back to JSON
+        // Convert CBOR back to JSON using the convert function directly
         let json2_path = temp_dir.path().join("roundtrip.json");
-        Command::cargo_bin("wasm-rr")
-            .map_err(|e| format!("Failed to find binary: {}", e))?
-            .arg("convert")
-            .arg(&cbor_path)
-            .arg(&json2_path)
-            .assert()
-            .success();
+        convert(
+            &cbor_path,
+            &json2_path,
+            TraceFormat::Cbor,
+            TraceFormat::Json,
+        )
+        .map_err(|e| format!("Failed to convert CBOR to JSON: {}", e))?;
 
         // Read the roundtrip JSON
         let json2_file = fs::File::open(&json2_path)
@@ -660,25 +654,20 @@ mod tests {
             .flush()
             .map_err(|e| format!("Failed to flush CBOR: {}", e))?;
 
-        // Convert CBOR to JSON
+        // Convert CBOR to JSON using the convert function directly
         let json_path = temp_dir.path().join("converted.json");
-        Command::cargo_bin("wasm-rr")
-            .map_err(|e| format!("Failed to find binary: {}", e))?
-            .arg("convert")
-            .arg(&cbor_path)
-            .arg(&json_path)
-            .assert()
-            .success();
+        convert(&cbor_path, &json_path, TraceFormat::Cbor, TraceFormat::Json)
+            .map_err(|e| format!("Failed to convert CBOR to JSON: {}", e))?;
 
-        // Convert JSON back to CBOR
+        // Convert JSON back to CBOR using the convert function directly
         let cbor2_path = temp_dir.path().join("roundtrip.cbor");
-        Command::cargo_bin("wasm-rr")
-            .map_err(|e| format!("Failed to find binary: {}", e))?
-            .arg("convert")
-            .arg(&json_path)
-            .arg(&cbor2_path)
-            .assert()
-            .success();
+        convert(
+            &json_path,
+            &cbor2_path,
+            TraceFormat::Json,
+            TraceFormat::Cbor,
+        )
+        .map_err(|e| format!("Failed to convert JSON to CBOR: {}", e))?;
 
         // Read the roundtrip CBOR
         let cbor2_file = fs::File::open(&cbor2_path)
