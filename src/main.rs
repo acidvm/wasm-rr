@@ -25,7 +25,7 @@ mod playback;
 mod recorder;
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use wasmtime::component::{Component, Linker};
@@ -63,8 +63,12 @@ impl TraceFormat {
 #[derive(Parser, Debug)]
 #[command(author, version, about, propagate_version = true)]
 struct Cli {
+    /// Generate markdown help documentation (hidden flag for docs generation)
+    #[arg(long, hide = true)]
+    markdown_help: bool,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -135,7 +139,25 @@ enum Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
+    // Handle markdown help generation
+    if cli.markdown_help {
+        use clap_markdown::help_markdown;
+
+        println!("# wasm-rr CLI Reference");
+        println!();
+        println!("This page contains the auto-generated reference documentation for the `wasm-rr` command-line interface.");
+        println!();
+        println!("{}", help_markdown::<Cli>());
+        return Ok(());
+    }
+
+    let Some(command) = cli.command else {
+        // No subcommand provided, print help
+        Cli::command().print_help()?;
+        return Ok(());
+    };
+
+    match command {
         Command::Record {
             wasm,
             trace,

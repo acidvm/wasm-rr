@@ -1,12 +1,27 @@
 # Trace Formats
 
-`wasm-rr` supports two trace formats: JSON and CBOR. This page explains both formats and when to use each.
+`wasm-rr` supports two trace formats: JSON and CBOR.
 
-## JSON Format
+## JSON Format (Default)
 
-JSON is the default trace format. It's human-readable and easy to inspect.
+JSON traces are human-readable text files.
 
-### Example JSON Trace
+**Advantages:**
+- Easy to inspect and understand
+- Works with standard text tools (grep, jq, etc.)
+- Good for version control (meaningful diffs)
+- Can be viewed in any text editor
+
+**Use JSON when:**
+- Debugging or inspecting traces
+- Storing traces in version control
+- File size isn't a concern
+
+**Example:**
+
+```bash
+wasm-rr record app.wasm -t trace.json
+```
 
 ```json
 {
@@ -26,182 +41,130 @@ JSON is the default trace format. It's human-readable and easy to inspect.
         ["HOME", "/home/user"],
         ["PATH", "/usr/bin:/bin"]
       ]
-    },
-    {
-      "call": "http_response",
-      "request_method": "GET",
-      "request_url": "https://api.example.com/data",
-      "request_headers": [
-        ["User-Agent", "wasm-component/1.0"]
-      ],
-      "status": 200,
-      "headers": [
-        ["Content-Type", "application/json"]
-      ],
-      "body": [123, 34, 107, 101, 121, 34, 58, 34, 118, 97, 108, 117, 101, 34, 125]
     }
   ]
 }
 ```
 
-### When to Use JSON
+## CBOR Format (Binary)
 
-- **Debugging**: Easy to read and understand
-- **Version control**: Text diffs work well
-- **Small traces**: File size isn't a concern
-- **Sharing**: Can be viewed in any text editor
+CBOR (Concise Binary Object Representation) is a compact binary format.
 
-## CBOR Format
+**Advantages:**
+- 30-50% smaller than JSON
+- Faster to read and write
+- Good for large traces
 
-CBOR (Concise Binary Object Representation) is a binary format that's more compact than JSON.
+**Use CBOR when:**
+- Traces are large (lots of HTTP responses)
+- Storage space matters
+- You don't need to inspect the trace manually
 
-### When to Use CBOR
+**Example:**
 
-- **Large traces**: HTTP responses with big bodies
-- **Performance**: Faster to parse and write
-- **Storage**: Significantly smaller file size
-- **Production**: When human readability isn't needed
+```bash
+wasm-rr record app.wasm -t trace.cbor
+```
 
 ### Size Comparison
 
-For typical traces, CBOR can be 30-50% smaller than JSON:
-
 ```bash
-# Record the same execution in both formats
-$ wasm-rr record app.wasm -t trace.json -f json
-$ wasm-rr record app.wasm -t trace.cbor -f cbor
-
-# Compare sizes
+$ wasm-rr record app.wasm -t trace.json
+$ wasm-rr record app.wasm -t trace.cbor
 $ ls -lh trace.*
 -rw-r--r-- 1 user user 245K trace.json
--rw-r--r-- 1 user user 123K trace.cbor
+-rw-r--r-- 1 user user 123K trace.cbor  # 50% smaller!
 ```
 
-## Format Conversion
+## Converting Between Formats
 
-You can convert between formats using the `convert` command:
+Use the `convert` command to switch formats:
 
 ```bash
-# JSON to CBOR
-wasm-rr convert trace.json trace.cbor
-
-# CBOR to JSON
+# Make a trace human-readable
 wasm-rr convert trace.cbor trace.json
 
+# Make a trace more compact
+wasm-rr convert trace.json trace.cbor
+
 # Explicit format specification
-wasm-rr convert input.bin output.txt --input-format cbor --output-format json
+wasm-rr convert input.bin output.json --input-format cbor --output-format json
 ```
 
-## Trace Event Types
+## Format Detection
 
-Both formats support the same event types:
+The format is automatically detected from the file extension:
 
-### Clock Events
+| Extension | Format |
+|-----------|--------|
+| `.json`   | JSON   |
+| `.cbor`   | CBOR   |
 
-```json
-{
-  "call": "clock_now",
-  "seconds": 1704067200,
-  "nanoseconds": 123456789
-}
+For other extensions, specify the format explicitly:
+
+```bash
+wasm-rr record app.wasm -t trace.bin -f cbor
+wasm-rr replay app.wasm trace.bin -f cbor
 ```
 
-```json
-{
-  "call": "clock_resolution",
-  "seconds": 0,
-  "nanoseconds": 1
-}
+## What's In a Trace?
+
+Both formats store the same information - just encoded differently.
+
+### Event Types
+
+**Clock operations:**
+- `clock_now` – Wall clock time
+- `clock_resolution` – Clock precision
+- `monotonic_clock_now` – Monotonic time
+- `monotonic_clock_resolution` – Monotonic clock precision
+
+**Random values:**
+- `random_bytes` – Array of random bytes
+- `random_u64` – Random 64-bit integer
+
+**Environment:**
+- `environment` – Environment variables
+- `arguments` – Command-line arguments
+- `initial_cwd` – Initial working directory
+
+**HTTP:**
+- `http_response` – Complete HTTP request and response
+
+### Inspecting JSON Traces
+
+Use standard tools to inspect JSON traces:
+
+```bash
+# View the trace
+cat trace.json
+
+# Pretty-print
+jq . trace.json
+
+# Count events
+jq '.events | length' trace.json
+
+# See event types
+jq '.events[].call' trace.json | sort | uniq -c
+
+# Find HTTP calls
+jq '.events[] | select(.call == "http_response")' trace.json
 ```
-
-```json
-{
-  "call": "monotonic_clock_now",
-  "nanoseconds": 987654321000
-}
-```
-
-```json
-{
-  "call": "monotonic_clock_resolution",
-  "nanoseconds": 1000
-}
-```
-
-### Random Events
-
-```json
-{
-  "call": "random_bytes",
-  "bytes": [42, 17, 99, 3, 255]
-}
-```
-
-```json
-{
-  "call": "random_u64",
-  "value": 9223372036854775807
-}
-```
-
-### Environment Events
-
-```json
-{
-  "call": "environment",
-  "entries": [
-    ["USER", "alice"],
-    ["HOME", "/home/alice"]
-  ]
-}
-```
-
-```json
-{
-  "call": "arguments",
-  "args": ["app.wasm", "--config", "prod"]
-}
-```
-
-```json
-{
-  "call": "initial_cwd",
-  "path": "/home/alice/projects"
-}
-```
-
-### HTTP Events
-
-```json
-{
-  "call": "http_response",
-  "request_method": "POST",
-  "request_url": "https://api.example.com/users",
-  "request_headers": [
-    ["Content-Type", "application/json"],
-    ["Authorization", "Bearer token123"]
-  ],
-  "status": 201,
-  "headers": [
-    ["Content-Type", "application/json"],
-    ["X-Request-ID", "abc-123"]
-  ],
-  "body": [...]
-}
-```
-
-## Format Auto-Detection
-
-`wasm-rr` automatically detects the format based on file extension:
-
-- `.json` → JSON format
-- `.cbor` → CBOR format
-- Other extensions require explicit `--format` flag
 
 ## Best Practices
 
-1. **Use JSON for development**: Easier to inspect and debug
-2. **Use CBOR for production**: Better performance and smaller size
-3. **Convert as needed**: Use `convert` command when switching contexts
-4. **Version control JSON**: Text-based diffs are more useful
-5. **Archive as CBOR**: Save storage space for long-term archives
+**For development and debugging:**
+- Use JSON format
+- Keep traces in version control
+- Use descriptive filenames
+
+**For production or archival:**
+- Use CBOR format
+- Saves significant space
+- Faster to process
+
+**General tips:**
+- Convert to JSON when you need to inspect
+- Convert to CBOR before archiving
+- Use `.json` or `.cbor` extensions for auto-detection

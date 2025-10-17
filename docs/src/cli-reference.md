@@ -15,9 +15,7 @@ This document contains the help content for the `wasm-rr` command-line program.
 
 ## `wasm-rr`
 
-A deterministic record-replay tool for WebAssembly components
-
-**Usage:** `wasm-rr <COMMAND>`
+**Usage:** `wasm-rr [COMMAND]`
 
 ###### **Subcommands:**
 

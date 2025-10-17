@@ -2,14 +2,13 @@
 
 [Introduction](./introduction.md)
 
-# User Guide
+# Usage
 
+- [Getting Started](./getting-started.md)
+- [Recording & Replaying](./recording-replaying.md)
 - [CLI Reference](./cli-reference.md)
-- [Recording Execution](./recording.md)
-- [Replaying Traces](./replaying.md)
+
+# Reference
+
 - [Trace Formats](./trace-formats.md)
-
-# Developer Guide
-
-- [Architecture](./architecture.md)
-- [Contributing](./contributing.md)
+- [Limitations](./limitations.md)
