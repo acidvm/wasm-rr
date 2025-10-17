@@ -10,6 +10,8 @@ set -euo pipefail
 : "${C_HELLO_WORLD_WASM:?C_HELLO_WORLD_WASM must be set}"
 : "${GO_HELLO_WORLD_WASM:?GO_HELLO_WORLD_WASM must be set}"
 : "${HELLO_HASKELL_WASM:?HELLO_HASKELL_WASM must be set}"
+: "${HELLO_PYTHON_WASM:?HELLO_PYTHON_WASM must be set}"
+: "${FIZZBUZZ_ZIG_WASM:?FIZZBUZZ_ZIG_WASM must be set}"
 : "${JS_WORDSTATS_WASM:?JS_WORDSTATS_WASM must be set}"
 : "${COUNTS_WASM:?COUNTS_WASM must be set}"
 
@@ -23,11 +25,26 @@ resolve_wasm() {
     c_hello_world) printf '%s\n' "$C_HELLO_WORLD_WASM" ;;
     go_hello_world) printf '%s\n' "$GO_HELLO_WORLD_WASM" ;;
     hello_haskell) printf '%s\n' "$HELLO_HASKELL_WASM" ;;
+    hello_python) printf '%s\n' "$HELLO_PYTHON_WASM" ;;
+    fizzbuzz_zig) printf '%s\n' "$FIZZBUZZ_ZIG_WASM" ;;
     js_wordstats) printf '%s\n' "$JS_WORDSTATS_WASM" ;;
     counts) printf '%s\n' "$COUNTS_WASM" ;;
     *)
       echo "unknown component: $1" >&2
       return 1
+      ;;
+  esac
+}
+
+get_stdin_file() {
+  case "$1" in
+    hello_python)
+      # Python needs its script via stdin
+      echo "$(dirname "$HELLO_PYTHON_WASM")/app.py"
+      ;;
+    *)
+      # No stdin needed for other components
+      echo ""
       ;;
   esac
 }
@@ -83,11 +100,20 @@ PY
   actual_stderr="$(mktemp)"
   fixture_fail=0
 
-  if ! "$WASM_RR_BIN" replay "$wasm_path" "$trace_file" >"$actual_stdout" 2>"$actual_stderr"; then
+  stdin_file="$(get_stdin_file "$component")"
+  if [[ -n "$stdin_file" ]] && [[ -f "$stdin_file" ]]; then
+    if ! "$WASM_RR_BIN" replay "$wasm_path" "$trace_file" <"$stdin_file" >"$actual_stdout" 2>"$actual_stderr"; then
+      echo "replay failed for $label" >&2
+      cat "$actual_stderr" >&2 || true
+      fixture_fail=1
+    fi
+  elif ! "$WASM_RR_BIN" replay "$wasm_path" "$trace_file" >"$actual_stdout" 2>"$actual_stderr"; then
     echo "replay failed for $label" >&2
     cat "$actual_stderr" >&2 || true
     fixture_fail=1
-  else
+  fi
+
+  if [[ $fixture_fail == 0 ]]; then
     if ! diff -u "$stdout_file" "$actual_stdout"; then
       echo "stdout mismatch for $label" >&2
       fixture_fail=1

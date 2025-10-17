@@ -1,0 +1,490 @@
+{
+  "events": [
+    {
+      "call": "monotonic_clock_now",
+      "nanoseconds": 384655209
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "hello_python.wasm"
+      ]
+    },
+    {
+      "call": "arguments",
+      "args": [
+        "hello_python.wasm"
+      ]
+    },
+    {
+      "call": "random_bytes",
+      "bytes": [
+        90,
+        175,
+        119,
+        219,
+        94,
+        135,
+        130,
+        223,
+        93,
+        184,
+        233,
+        197,
+        25,
+        147,
+        236,
+        188,
+        5,
+        7,
+        37,
+        67,
+        171,
+        145,
+        137,
+        95
+      ]
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "clock_now",
+      "seconds": 1760639185,
+      "nanoseconds": 663582000
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    },
+    {
+      "call": "environment",
+      "entries": []
+    }
+  ]
+}

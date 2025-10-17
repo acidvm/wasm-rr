@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context};
@@ -16,63 +17,144 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
-use crate::{Result, TraceEvent, TraceFile};
+use crate::{Result, TraceEvent, TraceFormat};
+
+enum TraceWriter {
+    Json {
+        writer: BufWriter<File>,
+        first: bool,
+    },
+    Cbor {
+        writer: BufWriter<File>,
+    },
+}
+
+impl TraceWriter {
+    fn new(output: PathBuf, format: TraceFormat) -> Result<Self> {
+        let file = File::create(&output)
+            .with_context(|| format!("failed to create trace file at {}", output.display()))?;
+        let writer = BufWriter::new(file);
+
+        match format {
+            TraceFormat::Json => {
+                let mut writer = writer;
+                // Write the beginning of the JSON array
+                writer
+                    .write_all(b"{\"events\":[\n")
+                    .context("failed to write JSON header")?;
+                Ok(TraceWriter::Json {
+                    writer,
+                    first: true,
+                })
+            }
+            TraceFormat::Cbor => Ok(TraceWriter::Cbor { writer }),
+        }
+    }
+
+    fn write_event(&mut self, event: &TraceEvent) -> Result<()> {
+        match self {
+            TraceWriter::Json { writer, first } => {
+                if !*first {
+                    writer.write_all(b",\n")?;
+                }
+                *first = false;
+                serde_json::to_writer(&mut *writer, event)?;
+                writer.flush()?;
+                Ok(())
+            }
+            TraceWriter::Cbor { writer } => {
+                ciborium::into_writer(event, &mut *writer)?;
+                writer.flush()?;
+                Ok(())
+            }
+        }
+    }
+
+    fn finish(self) -> Result<()> {
+        match self {
+            TraceWriter::Json { mut writer, .. } => {
+                writer.write_all(b"\n]}")?;
+                writer.flush()?;
+                Ok(())
+            }
+            TraceWriter::Cbor { mut writer } => {
+                writer.flush()?;
+                Ok(())
+            }
+        }
+    }
+}
 
 pub struct Recorder {
-    output: PathBuf,
-    events: Vec<TraceEvent>,
+    writer: Option<TraceWriter>,
+    error: Option<anyhow::Error>,
 }
 
 impl Recorder {
-    pub fn new(output: PathBuf) -> Self {
-        Self {
-            output,
-            events: Vec::new(),
+    pub fn new(output: PathBuf, format: TraceFormat) -> Self {
+        match TraceWriter::new(output, format) {
+            Ok(writer) => Self {
+                writer: Some(writer),
+                error: None,
+            },
+            Err(e) => Self {
+                writer: None,
+                error: Some(e),
+            },
+        }
+    }
+
+    fn write_event(&mut self, event: TraceEvent) {
+        if self.error.is_some() {
+            return;
+        }
+        if let Some(writer) = &mut self.writer {
+            if let Err(e) = writer.write_event(&event) {
+                self.error = Some(e);
+            }
         }
     }
 
     pub fn record_now(&mut self, dt: &clocks::wall_clock::Datetime) {
-        self.events.push(TraceEvent::ClockNow {
+        self.write_event(TraceEvent::ClockNow {
             seconds: dt.seconds,
             nanoseconds: dt.nanoseconds,
         });
     }
 
     pub fn record_resolution(&mut self, dt: &clocks::wall_clock::Datetime) {
-        self.events.push(TraceEvent::ClockResolution {
+        self.write_event(TraceEvent::ClockResolution {
             seconds: dt.seconds,
             nanoseconds: dt.nanoseconds,
         });
     }
 
     pub fn record_monotonic_now(&mut self, nanoseconds: u64) {
-        self.events
-            .push(TraceEvent::MonotonicClockNow { nanoseconds });
+        self.write_event(TraceEvent::MonotonicClockNow { nanoseconds });
     }
 
     pub fn record_monotonic_resolution(&mut self, nanoseconds: u64) {
-        self.events
-            .push(TraceEvent::MonotonicClockResolution { nanoseconds });
+        self.write_event(TraceEvent::MonotonicClockResolution { nanoseconds });
     }
 
     pub fn record_environment(&mut self, entries: Vec<(String, String)>) {
-        self.events.push(TraceEvent::Environment { entries });
+        self.write_event(TraceEvent::Environment { entries });
     }
 
     pub fn record_arguments(&mut self, args: Vec<String>) {
-        self.events.push(TraceEvent::Arguments { args });
+        self.write_event(TraceEvent::Arguments { args });
     }
 
     pub fn record_initial_cwd(&mut self, path: Option<String>) {
-        self.events.push(TraceEvent::InitialCwd { path });
+        self.write_event(TraceEvent::InitialCwd { path });
     }
 
     pub fn record_random_bytes(&mut self, bytes: Vec<u8>) {
-        self.events.push(TraceEvent::RandomBytes { bytes });
+        self.write_event(TraceEvent::RandomBytes { bytes });
     }
 
     pub fn record_random_u64(&mut self, value: u64) {
-        self.events.push(TraceEvent::RandomU64 { value });
+        self.write_event(TraceEvent::RandomU64 { value });
     }
 
     pub fn record_http_response(
@@ -84,7 +166,7 @@ impl Recorder {
         headers: Vec<(String, String)>,
         body: Vec<u8>,
     ) {
-        self.events.push(TraceEvent::HttpResponse {
+        self.write_event(TraceEvent::HttpResponse {
             request_method,
             request_url,
             request_headers,
@@ -94,18 +176,15 @@ impl Recorder {
         });
     }
 
-    pub fn save(self) -> Result<()> {
-        let trace = TraceFile {
-            events: self.events,
-        };
-
-        let file = File::create(&self.output)
-            .with_context(|| format!("failed to create trace file at {}", self.output.display()))?;
-
-        serde_json::to_writer_pretty(file, &trace)
-            .with_context(|| format!("failed to write trace file at {}", self.output.display()))?;
-
-        Ok(())
+    pub fn save(mut self) -> Result<()> {
+        if let Some(error) = self.error.take() {
+            return Err(error);
+        }
+        if let Some(writer) = self.writer.take() {
+            writer.finish()
+        } else {
+            Err(anyhow!("recorder has no writer"))
+        }
     }
 }
 
