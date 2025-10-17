@@ -29,10 +29,6 @@ jobs:
         if: github.event.action != 'closed'
         uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Setup Nix cache
-        if: github.event.action != 'closed'
-        uses: DeterminateSystems/magic-nix-cache-action@main
-
       - name: Build documentation
         if: github.event.action != 'closed'
         run: |
