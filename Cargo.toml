@@ -3,6 +3,10 @@ name = "wasm-rr"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "wasm_rr"
+path = "src/main.rs"
+
 [dependencies]
 wasmtime = { version = "37.0.2", features = ["component-model"] }
 wasmtime-wasi = { version = "37.0.2" }
@@ -21,3 +25,4 @@ bytes = "1.0"
 quickcheck = "1.0"
 quickcheck_macros = "1.0"
 tempfile = "3.0"
+assert_cmd = "2.0"

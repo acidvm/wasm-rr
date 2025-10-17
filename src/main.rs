@@ -262,9 +262,10 @@ fn convert(
     Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+/// A single trace event recorded during execution
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "call", rename_all = "snake_case")]
-enum TraceEvent {
+pub enum TraceEvent {
     ClockNow {
         seconds: u64,
         nanoseconds: u32,
@@ -304,9 +305,10 @@ enum TraceEvent {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct TraceFile {
-    events: Vec<TraceEvent>,
+/// A trace file containing multiple events
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TraceFile {
+    pub events: Vec<TraceEvent>,
 }
 
 fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
