@@ -208,11 +208,15 @@ fn main() -> Result<()> {
     if cli.markdown_help {
         use clap_markdown::help_markdown;
 
-        println!("# wasm-rr CLI Reference");
-        println!();
-        println!("This page contains the auto-generated reference documentation for the `wasm-rr` command-line interface.");
-        println!();
-        println!("{}", help_markdown::<Cli>());
+        // Allow println for markdown help generation (intentional stdout output)
+        #[allow(clippy::print_stdout)]
+        {
+            println!("# wasm-rr CLI Reference");
+            println!();
+            println!("This page contains the auto-generated reference documentation for the `wasm-rr` command-line interface.");
+            println!();
+            println!("{}", help_markdown::<Cli>());
+        }
         return Ok(());
     }
 
