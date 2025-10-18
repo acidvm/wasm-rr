@@ -28,3 +28,8 @@ target
 # Nix build outputs
 result
 result-*
+
+# mdBook generated documentation
+docs/book
+book
+docs/src/cli-reference-generated.md

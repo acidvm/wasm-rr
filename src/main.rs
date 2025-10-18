@@ -29,7 +29,7 @@ mod util;
 mod wasi;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use trace::{convert, TraceFormat};
 use wasmtime::component::Component;
@@ -41,8 +41,12 @@ use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 #[derive(Parser, Debug)]
 #[command(author, version, about, propagate_version = true)]
 struct Cli {
+    /// Generate markdown help documentation (hidden flag for docs generation)
+    #[arg(long, hide = true)]
+    markdown_help: bool,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -200,7 +204,29 @@ where
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
+    // Handle markdown help generation
+    if cli.markdown_help {
+        use clap_markdown::help_markdown;
+
+        // Allow println for markdown help generation (intentional stdout output)
+        #[allow(clippy::print_stdout)]
+        {
+            println!("# wasm-rr CLI Reference");
+            println!();
+            println!("This page contains the auto-generated reference documentation for the `wasm-rr` command-line interface.");
+            println!();
+            println!("{}", help_markdown::<Cli>());
+        }
+        return Ok(());
+    }
+
+    let Some(command) = cli.command else {
+        // No subcommand provided, print help and exit with error
+        Cli::command().print_help()?;
+        std::process::exit(1);
+    };
+
+    match command {
         Command::Record {
             wasm,
             trace,
