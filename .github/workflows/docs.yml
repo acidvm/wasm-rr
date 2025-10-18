@@ -21,6 +21,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      docs-changed: ${{ steps.docs-changed.outputs.changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,21 +41,45 @@ jobs:
           nix build .#docs
           cp -r result docs-output
 
-      - name: Upload artifact
+      - name: Compare documentation hashes
         if: github.event.action != 'closed'
+        id: docs-changed
+        run: |
+          # Get the new hash from the build
+          NEW_HASH=$(cat docs-output/docs-hash.txt)
+          echo "New documentation hash: ${NEW_HASH}"
+
+          # Try to fetch the current hash from deployed documentation
+          # If it doesn't exist (first deployment), treat as changed
+          CURRENT_HASH=$(curl -sf https://acidvm.github.io/wasm-rr/docs-hash.txt || echo "no-hash-found")
+          echo "Current deployed hash: ${CURRENT_HASH}"
+
+          # Determine if docs changed
+          if [ "${CURRENT_HASH}" = "${NEW_HASH}" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "::notice::Documentation unchanged - skipping deployment (hashes match: ${NEW_HASH})"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "::notice::Documentation changed - deploying (old: ${CURRENT_HASH}, new: ${NEW_HASH})"
+          fi
+
+      - name: Upload artifact for GitHub Pages
+        # Only upload artifact for main branch deployments (needed by deploy job)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.docs-changed.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs-output
 
       - name: Deploy PR preview
-        if: github.event_name == 'pull_request'
+        # Deploy preview if PR AND (docs changed OR PR closing)
+        if: github.event_name == 'pull_request' && (steps.docs-changed.outputs.changed == 'true' || github.event.action == 'closed')
         uses: rossjrw/pr-preview-action@v1
         with:
           source-dir: ./docs-output
 
   deploy:
-    # Only deploy on main branch pushes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Only deploy on main branch pushes when docs have changed
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.docs-changed == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

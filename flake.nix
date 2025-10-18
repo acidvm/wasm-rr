@@ -167,6 +167,13 @@
             # Build the documentation
             cd docs
             mdbook build
+
+            # Compute hash of the documentation output
+            # We hash all files except the hash file itself to get a deterministic checksum
+            cd book
+            find . -type f ! -name "docs-hash.txt" -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 > docs-hash.txt
+            echo "Documentation hash: $(cat docs-hash.txt)"
+            cd ..
           '';
 
           installPhase = ''
