@@ -1,0 +1,5 @@
+component = "read_stdin"
+trace = "trace.json"
+stdout = "stdout.txt"
+stderr = "stderr.txt"
+must_fail = true
