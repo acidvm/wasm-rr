@@ -20,20 +20,20 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       docs-changed: ${{ steps.docs-changed.outputs.changed }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Install Nix
         if: github.event.action != 'closed'
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: DeterminateSystems/nix-installer-action@v16
 
       - name: Setup FlakeHub Cache
         if: github.event.action != 'closed'
-        uses: DeterminateSystems/flakehub-cache-action@main
+        uses: DeterminateSystems/flakehub-cache-action@v9
 
       - name: Build documentation
         if: github.event.action != 'closed'
@@ -66,14 +66,14 @@ jobs:
       - name: Upload artifact for GitHub Pages
         # Only upload artifact for main branch deployments (needed by deploy job)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.docs-changed.outputs.changed == 'true'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v3.0.1
         with:
           path: ./docs-output
 
       - name: Deploy PR preview
         # Deploy preview if PR AND (docs changed OR PR closing)
         if: github.event_name == 'pull_request' && (steps.docs-changed.outputs.changed == 'true' || github.event.action == 'closed')
-        uses: rossjrw/pr-preview-action@v1
+        uses: rossjrw/pr-preview-action@v1.4.8
         with:
           source-dir: ./docs-output
 
@@ -83,9 +83,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v4.0.5
