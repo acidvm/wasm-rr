@@ -270,49 +270,34 @@
 
           # Shellcheck for all shell scripts
           shellcheck = pkgs.runCommand "shellcheck" {
-            nativeBuildInputs = [ pkgs.shellcheck ];
-          } ''
-            # Check all shell scripts
-            shellcheck ${./nix/golden-test.sh} \
-                      ${./nix/golden-fixture.sh} \
-                      ${./docs/build-cli-docs.sh}
-
-            touch $out
-          '';
-
-          # Spell check with cargo-spellcheck
-          # NOTE: Currently non-blocking due to cargo-spellcheck stability issues
-          # TODO: Make this blocking once the tool is more stable
-          spellcheck = pkgs.runCommand "spellcheck" {
             nativeBuildInputs = [
-              pkgs.cargo-spellcheck
-              pkgs.hunspellDicts.en_US
+              pkgs.shellcheck
+              pkgs.findutils
             ];
           } ''
-            # Copy source and config files to writable location
-            cp -r ${./.} ./workspace
-            chmod -R u+w ./workspace
-            cd ./workspace
+            # Find and check all shell scripts in the repository
+            # This includes:
+            # - Files with .sh extension
+            # - Files with #!/usr/bin/env bash or #!/bin/bash shebang
 
-            # Set up hunspell dictionaries
-            mkdir -p .hunspell
-            ln -s ${pkgs.hunspellDicts.en_US}/share/hunspell/en_US.dic .hunspell/
-            ln -s ${pkgs.hunspellDicts.en_US}/share/hunspell/en_US.aff .hunspell/
+            echo "Finding and checking all shell scripts..."
 
-            # Update search dirs in config to include .hunspell
-            sed -i 's|search_dirs = \["."\]|search_dirs = [".", ".hunspell"]|' .spellcheck.yml
+            # Track if any checks fail
+            failed=0
 
-            # Run spellcheck on individual files to avoid potential issues
-            # Currently non-blocking due to segfault issues with cargo-spellcheck
-            echo "Running spellcheck (currently non-blocking)..."
-
-            for file in README.md AGENTS.md CLAUDE.md; do
-              if [ -f "$file" ]; then
-                cargo-spellcheck check --cfg .spellcheck.yml "$file" || true
+            # Find all .sh files and files with bash shebang
+            (find ${./.} -type f -name "*.sh" -o -type f -exec grep -l '^#!/.*bash' {} \; 2>/dev/null || true) | while read -r script; do
+              echo "Checking: $script"
+              if ! shellcheck "$script"; then
+                failed=1
               fi
             done
 
-            # Create output (non-blocking until tool stability improves)
+            if [ "$failed" -eq 1 ]; then
+              echo "Shellcheck found issues in one or more scripts"
+              exit 1
+            fi
+
             touch $out
           '';
 
