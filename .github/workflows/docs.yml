@@ -25,44 +25,52 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check for documentation changes
-        uses: dorny/paths-filter@v2
-        id: docs-changes
-        with:
-          filters: |
-            docs:
-              - 'docs/**'
-              - 'docs/book.toml'
-              - 'flake.nix'
-              - '.github/workflows/docs.yml'
-              - 'README.md'
-              - 'AGENTS.md'
-              - 'CLAUDE.md'
-              - '**/CLAUDE.md'
-              - '**/AGENTS.md'
-
       - name: Install Nix
-        # Build if: PR closed event OR docs changed OR push to main
-        if: github.event.action != 'closed' && (steps.docs-changes.outputs.docs == 'true' || github.event_name == 'push')
+        if: github.event.action != 'closed'
         uses: DeterminateSystems/nix-installer-action@main
 
       - name: Build documentation
-        # Build if: PR closed event OR docs changed OR push to main
-        if: github.event.action != 'closed' && (steps.docs-changes.outputs.docs == 'true' || github.event_name == 'push')
+        if: github.event.action != 'closed'
         run: |
           nix build .#docs
           cp -r result docs-output
 
+      - name: Compare documentation hashes
+        if: github.event.action != 'closed'
+        id: docs-changed
+        run: |
+          # Get the new hash from the build
+          NEW_HASH=$(cat docs-output/docs-hash.txt)
+          echo "New documentation hash: ${NEW_HASH}"
+
+          # Try to fetch the current hash from deployed documentation
+          # If it doesn't exist (first deployment), treat as changed
+          CURRENT_HASH=$(curl -sf https://acidvm.github.io/wasm-rr/docs-hash.txt || echo "no-hash-found")
+          echo "Current deployed hash: ${CURRENT_HASH}"
+
+          # Determine if docs changed
+          if [ "${CURRENT_HASH}" = "${NEW_HASH}" ] && [ "${{ github.event_name }}" != "push" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "::notice::Documentation unchanged - skipping deployment (hashes match: ${NEW_HASH})"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::notice::Main branch push - deploying documentation"
+            else
+              echo "::notice::Documentation changed - deploying preview (old: ${CURRENT_HASH}, new: ${NEW_HASH})"
+            fi
+          fi
+
       - name: Upload artifact
-        # Upload if: PR closed event OR docs changed OR push to main
-        if: github.event.action != 'closed' && (steps.docs-changes.outputs.docs == 'true' || github.event_name == 'push')
+        # Upload if docs changed OR main branch push
+        if: github.event.action != 'closed' && steps.docs-changed.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs-output
 
       - name: Deploy PR preview
-        # Deploy preview if: PR AND (docs changed OR PR closing)
-        if: github.event_name == 'pull_request' && (steps.docs-changes.outputs.docs == 'true' || github.event.action == 'closed')
+        # Deploy preview if PR AND (docs changed OR PR closing)
+        if: github.event_name == 'pull_request' && (steps.docs-changed.outputs.changed == 'true' || github.event.action == 'closed')
         uses: rossjrw/pr-preview-action@v1
         with:
           source-dir: ./docs-output
