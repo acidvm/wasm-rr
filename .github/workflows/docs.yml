@@ -25,24 +25,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check for documentation changes
+        uses: dorny/paths-filter@v2
+        id: docs-changes
+        with:
+          filters: |
+            docs:
+              - 'docs/**'
+              - 'docs/book.toml'
+              - 'flake.nix'
+              - '.github/workflows/docs.yml'
+              - 'README.md'
+              - 'AGENTS.md'
+              - 'CLAUDE.md'
+              - '**/CLAUDE.md'
+              - '**/AGENTS.md'
+
       - name: Install Nix
-        if: github.event.action != 'closed'
+        # Build if: PR closed event OR docs changed OR push to main
+        if: github.event.action != 'closed' && (steps.docs-changes.outputs.docs == 'true' || github.event_name == 'push')
         uses: DeterminateSystems/nix-installer-action@main
 
       - name: Build documentation
-        if: github.event.action != 'closed'
+        # Build if: PR closed event OR docs changed OR push to main
+        if: github.event.action != 'closed' && (steps.docs-changes.outputs.docs == 'true' || github.event_name == 'push')
         run: |
           nix build .#docs
           cp -r result docs-output
 
       - name: Upload artifact
-        if: github.event.action != 'closed'
+        # Upload if: PR closed event OR docs changed OR push to main
+        if: github.event.action != 'closed' && (steps.docs-changes.outputs.docs == 'true' || github.event_name == 'push')
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs-output
 
       - name: Deploy PR preview
-        if: github.event_name == 'pull_request'
+        # Deploy preview if: PR AND (docs changed OR PR closing)
+        if: github.event_name == 'pull_request' && (steps.docs-changes.outputs.docs == 'true' || github.event.action == 'closed')
         uses: rossjrw/pr-preview-action@v1
         with:
           source-dir: ./docs-output
