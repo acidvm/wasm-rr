@@ -46,247 +46,70 @@
         };
         craneLib = (crane.mkLib pkgs).overrideToolchain rustWithWasmTarget;
 
-        examplePackages = example: let
-          src = craneLib.cleanCargoSource (craneLib.path ./examples/${example});
-        in {
-          "${example}-wasm" = craneLib.buildPackage {
-            name = "${example}-wasm";
-            inherit src;
-            inheritToolchain = false;
-
-            CARGO_BUILD_TARGET = "wasm32-wasip2";
-            doCheck = false;
-
-            installPhase = ''
-              mkdir -p $out
-              cp -v target/wasm32-wasip2/release/${example}.wasm $out/
-            '';
-          };
-        };
-
-        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num" "read_stdin"];
-
-        # Use Javy from the javy.nix flake
-        javy = javy-flake.packages.${system}.default;
-
-        # Build JavaScript example using Javy
-        js_wordstats-wasm = pkgs.stdenv.mkDerivation {
-          name = "js_wordstats-wasm";
-          src = ./examples/js_wordstats;
-
-          nativeBuildInputs = with pkgs; [
-            javy
-            wasm-tools
-          ];
-
-          buildPhase = ''
-            # Set up HOME directory
-            export HOME=$TMPDIR
-
-            # Compile JavaScript to WASI p1 module using Javy
-            javy build index.js -o js_wordstats_module.wasm
-
-            # Convert to WASI p2 component using adapter
-            wasm-tools component new js_wordstats_module.wasm \
-              --adapt wasi_snapshot_preview1=${wasi-adapter} \
-              -o js_wordstats.wasm
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp js_wordstats.wasm $out/
-          '';
-        };
-
-        packagesForExamples =
-          builtins.foldl' (acc: example: acc // examplePackages example) {}
-          examples;
-
         # Fetch the WASI adapter for converting wasip1 to wasip2
         wasi-adapter = pkgs.fetchurl {
           url = "https://github.com/bytecodealliance/wasmtime/releases/download/v37.0.2/wasi_snapshot_preview1.command.wasm";
           sha256 = "1lazj423za0816xi2sb7lvznrp7is3lkv4pil6nf77yj2v3qjvab";
         };
 
-        # Build C Hello World example
-        c_hello_world-wasm = pkgs.stdenv.mkDerivation {
-          name = "c_hello_world-wasm";
+        # Use Javy from the javy.nix flake
+        javy = javy-flake.packages.${system}.default;
+
+        # Import compilation functions
+        compileRust = import ./nix/compile_rust.nix { inherit craneLib; };
+        compileZig = import ./nix/compile_zig.nix { inherit pkgs wasi-adapter; };
+        compileC = import ./nix/compile_c.nix { inherit pkgs wasi-adapter; };
+        compileGo = import ./nix/compile_go.nix { inherit pkgs; };
+        compileJavaScript = import ./nix/compile_javascript.nix { inherit pkgs javy wasi-adapter; };
+        compileHaskell = import ./nix/compile_haskell.nix { inherit pkgs lib ghc-wasm-meta wasi-adapter system; };
+        compilePython = import ./nix/compile_python.nix { inherit pkgs wasi-adapter; };
+
+        # Build individual Rust examples
+        examplePackages = example: let
+          src = craneLib.cleanCargoSource (craneLib.path ./examples/${example});
+        in {
+          "${example}-wasm" = compileRust { name = example; inherit src; };
+        };
+
+        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num" "read_stdin"];
+
+        packagesForExamples =
+          builtins.foldl' (acc: example: acc // examplePackages example) {}
+          examples;
+
+        # Build language-specific examples
+        js_wordstats-wasm = compileJavaScript {
+          name = "js_wordstats";
+          src = ./examples/js_wordstats;
+        };
+
+        c_hello_world-wasm = compileC {
+          name = "c_hello_world";
           src = ./examples/c_hello_world;
-
-          nativeBuildInputs = with pkgs; [
-            zig
-            wasm-tools
-          ];
-
-          buildPhase = ''
-            # Set up Zig cache directory
-            export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-            mkdir -p $ZIG_GLOBAL_CACHE_DIR
-
-            # Compile C to WASI p1 module using Zig
-            zig cc \
-              -target wasm32-wasi \
-              -O2 \
-              -o hello_module.wasm \
-              hello.c
-
-            # Check the module was created
-            ls -la hello_module.wasm
-
-            # Convert to WASI p2 component using adapter
-            wasm-tools component new hello_module.wasm \
-              --adapt wasi_snapshot_preview1=${wasi-adapter} \
-              -o c_hello_world.wasm
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp c_hello_world.wasm $out/
-          '';
         };
 
-        # Build Go Hello World example
-        go_hello_world-wasm = pkgs.stdenv.mkDerivation {
-          name = "go_hello_world-wasm";
+        go_hello_world-wasm = compileGo {
+          name = "go_hello_world";
           src = ./examples/go_hello_world;
-
-          nativeBuildInputs = with pkgs; [
-            tinygo
-            wasm-tools
-          ];
-
-          buildPhase = ''
-            # Set up HOME directory for TinyGo
-            export HOME=$TMPDIR
-
-            # Compile Go to WASIp2 component using TinyGo
-            tinygo build -target=wasip2 -o go_hello_world.wasm main.go
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp go_hello_world.wasm $out/
-          '';
         };
 
-        # Build Haskell Hello World example
-        hello_haskell-wasm = pkgs.stdenv.mkDerivation {
-          name = "hello_haskell-wasm";
+        hello_haskell-wasm = compileHaskell {
+          name = "hello_haskell";
           src = ./examples/hello_haskell;
-
-          nativeBuildInputs = with pkgs; [
-            wasm-tools
-          ] ++ lib.optionals (ghc-wasm-meta ? packages.${system}) [
-            ghc-wasm-meta.packages.${system}.all_9_10
-          ];
-
-          buildPhase = ''
-            # Set up HOME directory
-            export HOME=$TMPDIR
-
-            # Compile directly with GHC (bypassing cabal to avoid network access)
-            wasm32-wasi-ghc \
-              -o hello-haskell.wasm \
-              -O2 \
-              Main.hs
-
-            # Convert to WASI p2 component using adapter
-            wasm-tools component new hello-haskell.wasm \
-              --adapt wasi_snapshot_preview1=${wasi-adapter} \
-              -o hello_haskell.wasm
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp hello_haskell.wasm $out/
-          '';
         };
 
-        # Fetch pre-built Python WASM runtime
-        python-wasm-module = pkgs.fetchurl {
-          url = "https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/python%2F3.12.0%2B20231211-040d5a6/python-3.12.0.wasm";
-          sha256 = "sha256-5dxaOYsHtU6o/bUDv2j7WD1TPxDsP5MJY+ArlQX3p2M=";
-        };
-
-        # Build Python Hello World example
-        hello_python-wasm = pkgs.stdenv.mkDerivation {
-          name = "hello_python-wasm";
+        hello_python-wasm = compilePython {
+          name = "hello_python";
           src = ./examples/hello_python;
-
-          nativeBuildInputs = with pkgs; [
-            wasm-tools
-          ];
-
-          buildPhase = ''
-            # The python-3.12.0.wasm is a WASI p1 module, convert to p2 component
-            wasm-tools component new ${python-wasm-module} \
-              --adapt wasi_snapshot_preview1=${wasi-adapter} \
-              -o hello_python.wasm
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp hello_python.wasm $out/
-            # Also copy the Python script for reference
-            cp app.py $out/
-          '';
         };
 
-        # Build Zig FizzBuzz example
-        fizzbuzz_zig-wasm = pkgs.stdenv.mkDerivation {
-          name = "fizzbuzz_zig-wasm";
+        fizzbuzz_zig-wasm = compileZig {
+          name = "fizzbuzz_zig";
           src = ./examples/fizzbuzz_zig;
-
-          nativeBuildInputs = with pkgs; [
-            zig
-            wasm-tools
-          ];
-
-          buildPhase = ''
-            # Set up Zig cache directory
-            export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-cache
-            mkdir -p $ZIG_GLOBAL_CACHE_DIR
-
-            # Compile Zig to WASI p1 module
-            zig build-exe \
-              -target wasm32-wasi \
-              -O ReleaseSmall \
-              -fno-entry \
-              -rdynamic \
-              main.zig
-
-            # Convert to WASI p2 component using adapter
-            wasm-tools component new main.wasm \
-              --adapt wasi_snapshot_preview1=${wasi-adapter} \
-              -o fizzbuzz_zig.wasm
-          '';
-
-          installPhase = ''
-            mkdir -p $out
-            cp fizzbuzz_zig.wasm $out/
-          '';
         };
 
-        # Build counts tool from GitHub release
-        counts-wasm = let
-          countsSrc = pkgs.fetchFromGitHub {
-            owner = "nnethercote";
-            repo = "counts";
-            rev = "1.0.6";
-            sha256 = "sha256-9f+8PBovI6ycsEITWMJ7XXdEe8wtcEBxcB2Cl9RMSr0=";
-          };
-        in craneLib.buildPackage {
-          name = "counts-wasm";
-          src = countsSrc;
-
-          CARGO_BUILD_TARGET = "wasm32-wasip2";
-          doCheck = false;
-
-          installPhase = ''
-            mkdir -p $out
-            cp target/wasm32-wasip2/release/counts.wasm $out/
-          '';
-        };
+        # Import counts program definition
+        counts-wasm = import ./nix/program-counts.nix { inherit pkgs craneLib; };
 
         goldenFixtureScript = builtins.readFile ./nix/golden-fixture.sh;
         goldenTestScript = builtins.readFile ./nix/golden-test.sh;
