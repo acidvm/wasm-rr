@@ -301,6 +301,29 @@
             touch $out
           '';
 
+          # Statix check for Nix files
+          statix = pkgs.runCommand "statix-check" {
+            nativeBuildInputs = [ pkgs.statix ];
+          } ''
+            echo "Running statix to check Nix files..."
+
+            # Copy source to writable location (statix needs write access for some operations)
+            cp -r ${./.} ./workspace
+            chmod -R u+w ./workspace
+            cd ./workspace
+
+            # Run statix check on all Nix files
+            if statix check .; then
+              echo "All Nix files passed statix checks"
+            else
+              echo "Statix found issues. Run 'statix fix' to auto-fix some issues"
+              echo "Note: Currently non-blocking to allow gradual improvement"
+              # TODO: Change to 'exit 1' once existing issues are fixed
+            fi
+
+            touch $out
+          '';
+
           # Markdown format check using mdformat
           markdown-fmt = pkgs.runCommand "markdown-fmt-check" {
             nativeBuildInputs = [ pkgs.python3Packages.mdformat ];
