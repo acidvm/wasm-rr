@@ -23,13 +23,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: DeterminateSystems/nix-installer-action@v16
 
       - name: Publish to FlakeHub
-        uses: DeterminateSystems/flakehub-push@main
+        uses: DeterminateSystems/flakehub-push@v5
         with:
           name: acidvm/wasm-rr
           rolling: true

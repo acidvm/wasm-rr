@@ -14,20 +14,20 @@ jobs:
         # macOS-latest disabled: GitHub Actions macOS runners are significantly more expensive
         # than Linux runners (10x cost multiplier), making them unsuitable for regular CI runs
         # on open source projects with limited Actions budget.
-        runner: [ubuntu-latest, ubuntu-24.04-arm]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5.0.0
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: DeterminateSystems/nix-installer-action@v16
 
       - name: Setup FlakeHub Cache
-        uses: DeterminateSystems/flakehub-cache-action@main
+        uses: DeterminateSystems/flakehub-cache-action@v2
 
       - name: Run flake checks
         run: nix flake check --print-build-logs

@@ -100,6 +100,7 @@ Conventional Commits format: `<type>[optional scope]: <description>`
 
 - Use lowercase for the description
 - Types: feat, fix, docs, style, refactor, test, chore, ci
+- NEVER include "Generated with..." or "Co-authored by..." text in commit messages or PR descriptions
 
 ### 5. Push and Create Pull Request
 
@@ -124,6 +125,7 @@ gh pr create --title "Your PR title" --body "## Motivation
 - Provide a brief summary of the approach, not implementation details
 - The code diff shows the implementation - don't repeat it in words
 - Testing is automated - only add a Testing section if adding new tests
+- NEVER include "Generated with..." or "Co-authored by..." text in PR descriptions
 
 ## Branch Naming Conventions
 
