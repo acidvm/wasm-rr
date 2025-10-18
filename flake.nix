@@ -267,6 +267,94 @@
             # If tests pass, create output
             touch $out
           '';
+
+          # Shellcheck for all shell scripts
+          shellcheck = pkgs.runCommand "shellcheck" {
+            nativeBuildInputs = [ pkgs.shellcheck ];
+          } ''
+            # Check all shell scripts
+            shellcheck ${./nix/golden-test.sh} \
+                      ${./nix/golden-fixture.sh} \
+                      ${./docs/build-cli-docs.sh}
+
+            touch $out
+          '';
+
+          # Spell check with cargo-spellcheck
+          spellcheck = pkgs.runCommand "spellcheck" {
+            nativeBuildInputs = [ pkgs.cargo-spellcheck ];
+          } ''
+            # Copy source and config files to writable location
+            cp -r ${./.} ./workspace
+            chmod -R u+w ./workspace
+            cd ./workspace
+
+            # Run spellcheck using the config and dictionary
+            cargo-spellcheck check --code 1 \
+              --cfg .spellcheck.yml \
+              README.md AGENTS.md CLAUDE.md \
+              docs/**/*.md \
+              src/**/*.rs \
+              examples/**/*.rs \
+              || echo "Note: Spellcheck found issues. Consider updating dictionary.txt"
+
+            # Create output (currently non-blocking to allow iterative dictionary improvements)
+            touch $out
+          '';
+
+          # Markdown format check using mdformat
+          markdown-fmt = pkgs.runCommand "markdown-fmt-check" {
+            nativeBuildInputs = [ pkgs.python3Packages.mdformat ];
+          } ''
+            # Create working directory
+            mkdir -p work
+            cd work
+
+            # Check markdown formatting
+            failed=0
+
+            # Check docs directory markdown files
+            find ${./docs} -name "*.md" -type f | while read -r file; do
+              # Copy file to temp location with writable permissions
+              cp "$file" "$(basename "$file").orig"
+              cp "$file" "$(basename "$file").formatted"
+
+              # Format the copy (mdformat will format in place)
+              mdformat "$(basename "$file").formatted"
+
+              # Compare with original
+              if ! diff -u "$(basename "$file").orig" "$(basename "$file").formatted" > /dev/null; then
+                echo "Markdown formatting issues in: $file"
+                echo "Run 'mdformat $file' to fix"
+                diff -u "$(basename "$file").orig" "$(basename "$file").formatted" || true
+                failed=1
+              fi
+            done
+
+            # Check root directory markdown files
+            for file in ${./.}/*.md; do
+              if [ -f "$file" ]; then
+                # Copy file to temp location with writable permissions
+                cp "$file" "$(basename "$file").orig"
+                cp "$file" "$(basename "$file").formatted"
+
+                # Format the copy
+                mdformat "$(basename "$file").formatted"
+
+                # Compare with original
+                if ! diff -u "$(basename "$file").orig" "$(basename "$file").formatted" > /dev/null; then
+                  echo "Markdown formatting issues in: $file"
+                  echo "Run 'mdformat $file' to fix"
+                  diff -u "$(basename "$file").orig" "$(basename "$file").formatted" || true
+                  failed=1
+                fi
+              fi
+            done
+
+            # For now, always succeed to not block CI
+            # Change to 'exit $failed' when ready to enforce
+            touch $out
+          '';
         };
 
         apps = {
