@@ -1,10 +1,20 @@
 use anyhow::{Context, Result};
+use std::marker::PhantomData;
 use std::path::Path;
-use wasmtime::component::Linker;
+use wasmtime::component::{HasData, Linker};
 use wasmtime::{Config, Engine};
-use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem, sync::io::streams};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::WasiHttpView;
+
+struct Intercept<T>(PhantomData<T>);
+
+impl<T: 'static> HasData for Intercept<T> {
+    type Data<'a>
+        = &'a mut T
+    where
+        T: 'a;
+}
 
 /// Configure a Wasmtime engine and linker with WASI support
 ///
@@ -19,6 +29,12 @@ where
         + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
+        + filesystem::types::Host
+        + filesystem::types::HostDescriptor
+        + filesystem::types::HostDirectoryEntryStream
+        + streams::Host
+        + streams::HostInputStream
+        + streams::HostOutputStream
         + 'static,
 {
     // Create an engine with the component model enabled and a component linker.
@@ -36,18 +52,12 @@ where
 
     // Now add the components we want to intercept using our custom implementations
     // We need to use a wrapper type pattern to make this work with the linker
-    struct Intercept<T>(std::marker::PhantomData<T>);
-    impl<T: 'static> wasmtime::component::HasData for Intercept<T> {
-        type Data<'a>
-            = &'a mut T
-        where
-            T: 'a;
-    }
-
     clocks::wall_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     clocks::monotonic_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    filesystem::types::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    streams::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
 
     // Add remaining WASI components that we don't need to intercept
     add_remaining_wasi_to_linker(&mut linker)?;
@@ -68,7 +78,6 @@ fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
         t.ctx().table
     })?;
     bindings::sync::io::poll::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
-    bindings::sync::io::streams::add_to_linker::<T, HasIo>(linker, |t| t.ctx().table)?;
 
     Ok(())
 }
@@ -96,9 +105,6 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     // No clock components to add here - wall_clock and monotonic_clock are intercepted
 
     // Add filesystem components
-    bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
-        ctx.filesystem()
-    })?;
     bindings::sync::filesystem::preopens::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
         ctx.filesystem()
     })?;

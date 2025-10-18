@@ -5,10 +5,13 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
-use wasmtime::component::ResourceTable;
+use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::cli::WasiCliView;
 use wasmtime_wasi::clocks::WasiClocksView as _;
-use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::filesystem::WasiFilesystemView as _;
+use wasmtime_wasi::p2::bindings::sync::io::{poll, streams};
+use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem};
+use wasmtime_wasi::p2::{FsResult, StreamError, StreamResult};
 use wasmtime_wasi::random::WasiRandomView as _;
 use wasmtime_wasi::runtime;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
@@ -157,6 +160,10 @@ impl Recorder {
 
     pub fn record_random_u64(&mut self, value: u64) {
         self.write_event(TraceEvent::RandomU64 { value });
+    }
+
+    pub fn record_filesystem_read(&mut self) {
+        self.write_event(TraceEvent::Read);
     }
 
     pub fn record_http_response(
@@ -388,5 +395,412 @@ impl random::random::Host for CtxRecorder {
         let value = self.random().get_random_u64()?;
         self.recorder.record_random_u64(value);
         Ok(value)
+    }
+}
+
+impl streams::Host for CtxRecorder {
+    fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::Host>::convert_stream_error(view.table, err)
+    }
+}
+
+impl streams::HostInputStream for CtxRecorder {
+    fn drop(&mut self, stream: Resource<streams::InputStream>) -> anyhow::Result<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostInputStream>::drop(view.table, stream)
+    }
+
+    fn read(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<Vec<u8>> {
+        self.recorder.record_filesystem_read();
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostInputStream>::read(view.table, stream, len)
+    }
+
+    fn blocking_read(
+        &mut self,
+        stream: Resource<streams::InputStream>,
+        len: u64,
+    ) -> StreamResult<Vec<u8>> {
+        self.recorder.record_filesystem_read();
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostInputStream>::blocking_read(view.table, stream, len)
+    }
+
+    fn skip(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<u64> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostInputStream>::skip(view.table, stream, len)
+    }
+
+    fn blocking_skip(
+        &mut self,
+        stream: Resource<streams::InputStream>,
+        len: u64,
+    ) -> StreamResult<u64> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostInputStream>::blocking_skip(view.table, stream, len)
+    }
+
+    fn subscribe(
+        &mut self,
+        stream: Resource<streams::InputStream>,
+    ) -> anyhow::Result<Resource<poll::Pollable>> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostInputStream>::subscribe(view.table, stream)
+    }
+}
+
+impl streams::HostOutputStream for CtxRecorder {
+    fn drop(&mut self, stream: Resource<streams::OutputStream>) -> anyhow::Result<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::drop(view.table, stream)
+    }
+
+    fn check_write(&mut self, stream: Resource<streams::OutputStream>) -> StreamResult<u64> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::check_write(view.table, stream)
+    }
+
+    fn write(
+        &mut self,
+        stream: Resource<streams::OutputStream>,
+        bytes: Vec<u8>,
+    ) -> StreamResult<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::write(view.table, stream, bytes)
+    }
+
+    fn blocking_write_and_flush(
+        &mut self,
+        stream: Resource<streams::OutputStream>,
+        bytes: Vec<u8>,
+    ) -> StreamResult<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::blocking_write_and_flush(
+            view.table, stream, bytes,
+        )
+    }
+
+    fn blocking_write_zeroes_and_flush(
+        &mut self,
+        stream: Resource<streams::OutputStream>,
+        len: u64,
+    ) -> StreamResult<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::blocking_write_zeroes_and_flush(
+            view.table, stream, len,
+        )
+    }
+
+    fn subscribe(
+        &mut self,
+        stream: Resource<streams::OutputStream>,
+    ) -> anyhow::Result<Resource<poll::Pollable>> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::subscribe(view.table, stream)
+    }
+
+    fn write_zeroes(
+        &mut self,
+        stream: Resource<streams::OutputStream>,
+        len: u64,
+    ) -> StreamResult<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::write_zeroes(view.table, stream, len)
+    }
+
+    fn flush(&mut self, stream: Resource<streams::OutputStream>) -> StreamResult<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::flush(view.table, stream)
+    }
+
+    fn blocking_flush(&mut self, stream: Resource<streams::OutputStream>) -> StreamResult<()> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::blocking_flush(view.table, stream)
+    }
+
+    fn splice(
+        &mut self,
+        dst: Resource<streams::OutputStream>,
+        src: Resource<streams::InputStream>,
+        len: u64,
+    ) -> StreamResult<u64> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::splice(view.table, dst, src, len)
+    }
+
+    fn blocking_splice(
+        &mut self,
+        dst: Resource<streams::OutputStream>,
+        src: Resource<streams::InputStream>,
+        len: u64,
+    ) -> StreamResult<u64> {
+        let view = WasiView::ctx(self);
+        <ResourceTable as streams::HostOutputStream>::blocking_splice(view.table, dst, src, len)
+    }
+}
+
+impl filesystem::types::Host for CtxRecorder {
+    fn convert_error_code(
+        &mut self,
+        err: wasmtime_wasi::p2::FsError,
+    ) -> anyhow::Result<filesystem::types::ErrorCode> {
+        self.filesystem().convert_error_code(err)
+    }
+
+    fn filesystem_error_code(
+        &mut self,
+        err: Resource<streams::Error>,
+    ) -> anyhow::Result<Option<filesystem::types::ErrorCode>> {
+        self.filesystem().filesystem_error_code(err)
+    }
+}
+
+impl filesystem::types::HostDescriptor for CtxRecorder {
+    fn advise(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        offset: filesystem::types::Filesize,
+        len: filesystem::types::Filesize,
+        advice: filesystem::types::Advice,
+    ) -> FsResult<()> {
+        self.filesystem().advise(fd, offset, len, advice)
+    }
+
+    fn sync_data(&mut self, fd: Resource<filesystem::types::Descriptor>) -> FsResult<()> {
+        self.filesystem().sync_data(fd)
+    }
+
+    fn get_flags(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+    ) -> FsResult<filesystem::types::DescriptorFlags> {
+        self.filesystem().get_flags(fd)
+    }
+
+    fn get_type(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+    ) -> FsResult<filesystem::types::DescriptorType> {
+        self.filesystem().get_type(fd)
+    }
+
+    fn set_size(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        size: filesystem::types::Filesize,
+    ) -> FsResult<()> {
+        self.filesystem().set_size(fd, size)
+    }
+
+    fn set_times(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        atim: filesystem::types::NewTimestamp,
+        mtim: filesystem::types::NewTimestamp,
+    ) -> FsResult<()> {
+        self.filesystem().set_times(fd, atim, mtim)
+    }
+
+    fn read(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        len: filesystem::types::Filesize,
+        offset: filesystem::types::Filesize,
+    ) -> FsResult<(Vec<u8>, bool)> {
+        self.recorder.record_filesystem_read();
+        self.filesystem().read(fd, len, offset)
+    }
+
+    fn write(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        buf: Vec<u8>,
+        offset: filesystem::types::Filesize,
+    ) -> FsResult<filesystem::types::Filesize> {
+        self.filesystem().write(fd, buf, offset)
+    }
+
+    fn read_directory(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+    ) -> FsResult<Resource<filesystem::types::DirectoryEntryStream>> {
+        self.filesystem().read_directory(fd)
+    }
+
+    fn sync(&mut self, fd: Resource<filesystem::types::Descriptor>) -> FsResult<()> {
+        self.filesystem().sync(fd)
+    }
+
+    fn create_directory_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path: String,
+    ) -> FsResult<()> {
+        self.filesystem().create_directory_at(fd, path)
+    }
+
+    fn stat(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+    ) -> FsResult<filesystem::types::DescriptorStat> {
+        self.filesystem().stat(fd)
+    }
+
+    fn stat_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path_flags: filesystem::types::PathFlags,
+        path: String,
+    ) -> FsResult<filesystem::types::DescriptorStat> {
+        self.filesystem().stat_at(fd, path_flags, path)
+    }
+
+    fn set_times_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path_flags: filesystem::types::PathFlags,
+        path: String,
+        atim: filesystem::types::NewTimestamp,
+        mtim: filesystem::types::NewTimestamp,
+    ) -> FsResult<()> {
+        self.filesystem()
+            .set_times_at(fd, path_flags, path, atim, mtim)
+    }
+
+    fn link_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path_flags: filesystem::types::PathFlags,
+        old_path: String,
+        new_fd: Resource<filesystem::types::Descriptor>,
+        new_path: String,
+    ) -> FsResult<()> {
+        self.filesystem()
+            .link_at(fd, path_flags, old_path, new_fd, new_path)
+    }
+
+    fn open_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path_flags: filesystem::types::PathFlags,
+        path: String,
+        open_flags: filesystem::types::OpenFlags,
+        descriptor_flags: filesystem::types::DescriptorFlags,
+    ) -> FsResult<Resource<filesystem::types::Descriptor>> {
+        self.filesystem()
+            .open_at(fd, path_flags, path, open_flags, descriptor_flags)
+    }
+
+    fn drop(&mut self, fd: Resource<filesystem::types::Descriptor>) -> anyhow::Result<()> {
+        let mut fs = self.filesystem();
+        filesystem::types::HostDescriptor::drop(&mut fs, fd)
+    }
+
+    fn readlink_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path: String,
+    ) -> FsResult<String> {
+        self.filesystem().readlink_at(fd, path)
+    }
+
+    fn remove_directory_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path: String,
+    ) -> FsResult<()> {
+        self.filesystem().remove_directory_at(fd, path)
+    }
+
+    fn rename_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        old_path: String,
+        new_fd: Resource<filesystem::types::Descriptor>,
+        new_path: String,
+    ) -> FsResult<()> {
+        self.filesystem().rename_at(fd, old_path, new_fd, new_path)
+    }
+
+    fn symlink_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        old_path: String,
+        new_path: String,
+    ) -> FsResult<()> {
+        self.filesystem().symlink_at(fd, old_path, new_path)
+    }
+
+    fn unlink_file_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path: String,
+    ) -> FsResult<()> {
+        self.filesystem().unlink_file_at(fd, path)
+    }
+
+    fn read_via_stream(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        offset: filesystem::types::Filesize,
+    ) -> FsResult<Resource<streams::InputStream>> {
+        self.filesystem().read_via_stream(fd, offset)
+    }
+
+    fn write_via_stream(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        offset: filesystem::types::Filesize,
+    ) -> FsResult<Resource<streams::OutputStream>> {
+        self.filesystem().write_via_stream(fd, offset)
+    }
+
+    fn append_via_stream(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+    ) -> FsResult<Resource<streams::OutputStream>> {
+        self.filesystem().append_via_stream(fd)
+    }
+
+    fn is_same_object(
+        &mut self,
+        a: Resource<filesystem::types::Descriptor>,
+        b: Resource<filesystem::types::Descriptor>,
+    ) -> anyhow::Result<bool> {
+        self.filesystem().is_same_object(a, b)
+    }
+
+    fn metadata_hash(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+    ) -> FsResult<filesystem::types::MetadataHashValue> {
+        self.filesystem().metadata_hash(fd)
+    }
+
+    fn metadata_hash_at(
+        &mut self,
+        fd: Resource<filesystem::types::Descriptor>,
+        path_flags: filesystem::types::PathFlags,
+        path: String,
+    ) -> FsResult<filesystem::types::MetadataHashValue> {
+        self.filesystem().metadata_hash_at(fd, path_flags, path)
+    }
+}
+
+impl filesystem::types::HostDirectoryEntryStream for CtxRecorder {
+    fn read_directory_entry(
+        &mut self,
+        stream: Resource<filesystem::types::DirectoryEntryStream>,
+    ) -> FsResult<Option<filesystem::types::DirectoryEntry>> {
+        self.filesystem().read_directory_entry(stream)
+    }
+
+    fn drop(
+        &mut self,
+        stream: Resource<filesystem::types::DirectoryEntryStream>,
+    ) -> anyhow::Result<()> {
+        let mut fs = self.filesystem();
+        filesystem::types::HostDirectoryEntryStream::drop(&mut fs, stream)
     }
 }
