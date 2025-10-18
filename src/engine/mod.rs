@@ -3,6 +3,7 @@ use std::path::Path;
 use wasmtime::component::Linker;
 use wasmtime::{Config, Engine};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::bindings::sync::cli as sync_cli;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::WasiHttpView;
 
@@ -19,6 +20,9 @@ where
         + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
+        + sync_cli::stdin::Host
+        + sync_cli::stdout::Host
+        + sync_cli::stderr::Host
         + 'static,
 {
     // Create an engine with the component model enabled and a component linker.
@@ -48,6 +52,9 @@ where
     clocks::monotonic_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    sync_cli::stdin::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    sync_cli::stdout::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    sync_cli::stderr::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
 
     // Add remaining WASI components that we don't need to intercept
     add_remaining_wasi_to_linker(&mut linker)?;
@@ -80,10 +87,7 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     use wasmtime_wasi::random::{WasiRandom, WasiRandomView};
     use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsView};
 
-    // Add CLI components (except environment which we intercept)
-    bindings::sync::cli::stdin::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::stdout::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
-    bindings::sync::cli::stderr::add_to_linker::<T, WasiCli>(linker, |ctx| ctx.cli())?;
+    // Add CLI components (except environment, stdin, stdout, and stderr which we intercept)
     bindings::sync::cli::exit::add_to_linker::<T, WasiCli>(linker, &Default::default(), |ctx| {
         ctx.cli()
     })?;

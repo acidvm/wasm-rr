@@ -9,6 +9,7 @@ use wasmtime::component::ResourceTable;
 use wasmtime_wasi::cli::WasiCliView;
 use wasmtime_wasi::clocks::WasiClocksView as _;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::bindings::sync::cli as sync_cli;
 use wasmtime_wasi::random::WasiRandomView as _;
 use wasmtime_wasi::runtime;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
@@ -179,12 +180,10 @@ impl Recorder {
     }
 
     // TODO: These will be called when filesystem interception is implemented
-    #[allow(dead_code)]
     pub fn record_descriptor_read(&mut self) {
         self.write_event(TraceEvent::DescriptorRead);
     }
 
-    #[allow(dead_code)]
     pub fn record_descriptor_write(&mut self) {
         self.write_event(TraceEvent::DescriptorWrite);
     }
@@ -395,6 +394,40 @@ impl cli::environment::Host for CtxRecorder {
         let cwd = self.cli().initial_cwd()?;
         self.recorder.record_initial_cwd(cwd.clone());
         Ok(cwd)
+    }
+}
+
+
+// Implement stdin interception
+impl sync_cli::stdin::Host for CtxRecorder {
+    fn get_stdin(&mut self) -> anyhow::Result<wasmtime::component::Resource<sync_cli::stdin::InputStream>> {
+        // Record that stdin was accessed
+        self.recorder.record_descriptor_read();
+        // Delegate to the actual implementation
+        use wasmtime_wasi::cli::WasiCliView;
+        self.cli().get_stdin()
+    }
+}
+
+// Implement stdout interception
+impl sync_cli::stdout::Host for CtxRecorder {
+    fn get_stdout(&mut self) -> anyhow::Result<wasmtime::component::Resource<sync_cli::stdout::OutputStream>> {
+        // Record that stdout was accessed (which will lead to writes)
+        self.recorder.record_descriptor_write();
+        // Delegate to the actual implementation
+        use wasmtime_wasi::cli::WasiCliView;
+        self.cli().get_stdout()
+    }
+}
+
+// Implement stderr interception
+impl sync_cli::stderr::Host for CtxRecorder {
+    fn get_stderr(&mut self) -> anyhow::Result<wasmtime::component::Resource<sync_cli::stderr::OutputStream>> {
+        // Record that stderr was accessed (which will lead to writes)
+        self.recorder.record_descriptor_write();
+        // Delegate to the actual implementation
+        use wasmtime_wasi::cli::WasiCliView;
+        self.cli().get_stderr()
     }
 }
 

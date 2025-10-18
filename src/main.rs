@@ -35,6 +35,7 @@ use trace::{convert, TraceFormat};
 use wasmtime::component::Component;
 use wasmtime::Store;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::bindings::sync::cli as sync_cli;
 use wasmtime_wasi::WasiView;
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -146,6 +147,9 @@ where
         + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
+        + sync_cli::stdin::Host
+        + sync_cli::stdout::Host
+        + sync_cli::stderr::Host
         + 'static,
 {
     let wasm_path = wasm_path.as_ref();

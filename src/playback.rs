@@ -10,6 +10,7 @@ use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::bindings::sync::cli as sync_cli;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::types::{
     HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
@@ -33,6 +34,31 @@ pub struct Playback {
 }
 
 impl Playback {
+    /// Peek at the next event without consuming it
+    pub fn peek_event(&mut self) -> Option<TraceEvent> {
+        match &mut self.source {
+            PlaybackSource::Memory(events) => events.front().cloned(),
+            PlaybackSource::Stream(_reader) => {
+                // For CBOR streams, we can't easily peek without consuming
+                // This would require buffering which we don't implement yet
+                None
+            }
+        }
+    }
+
+    /// Consume the next event without returning it
+    pub fn consume_event(&mut self) {
+        match &mut self.source {
+            PlaybackSource::Memory(events) => {
+                events.pop_front();
+            }
+            PlaybackSource::Stream(reader) => {
+                // For CBOR streams, read and discard the next event
+                let _: Result<TraceEvent, _> = ciborium::from_reader(&mut *reader);
+            }
+        }
+    }
+
     pub fn from_file(path: &Path, format: TraceFormat) -> Result<Self> {
         let file = File::open(path)
             .with_context(|| format!("failed to open trace file at {}", path.display()))?;
@@ -395,6 +421,46 @@ impl cli::environment::Host for CtxPlayback {
 
     fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
         self.playback.next_initial_cwd()
+    }
+}
+
+// Implement stdin interception for playback
+impl sync_cli::stdin::Host for CtxPlayback {
+    fn get_stdin(&mut self) -> anyhow::Result<wasmtime::component::Resource<sync_cli::stdin::InputStream>> {
+        // For now, just consume the event marker and delegate to actual implementation
+        // In the future, this will replay recorded stdin data
+        if let Some(TraceEvent::DescriptorRead) = self.playback.peek_event() {
+            self.playback.consume_event();
+        }
+        // Delegate to the actual implementation
+        use wasmtime_wasi::cli::WasiCliView;
+        self.cli().get_stdin()
+    }
+}
+
+// Implement stdout interception for playback
+impl sync_cli::stdout::Host for CtxPlayback {
+    fn get_stdout(&mut self) -> anyhow::Result<wasmtime::component::Resource<sync_cli::stdout::OutputStream>> {
+        // For now, just consume the event marker and delegate to actual implementation
+        if let Some(TraceEvent::DescriptorWrite) = self.playback.peek_event() {
+            self.playback.consume_event();
+        }
+        // Delegate to the actual implementation
+        use wasmtime_wasi::cli::WasiCliView;
+        self.cli().get_stdout()
+    }
+}
+
+// Implement stderr interception for playback
+impl sync_cli::stderr::Host for CtxPlayback {
+    fn get_stderr(&mut self) -> anyhow::Result<wasmtime::component::Resource<sync_cli::stderr::OutputStream>> {
+        // For now, just consume the event marker and delegate to actual implementation
+        if let Some(TraceEvent::DescriptorWrite) = self.playback.peek_event() {
+            self.playback.consume_event();
+        }
+        // Delegate to the actual implementation
+        use wasmtime_wasi::cli::WasiCliView;
+        self.cli().get_stderr()
     }
 }
 
