@@ -178,20 +178,25 @@ impl Recorder {
         });
     }
 
-    pub fn record_descriptor_read(&mut self, fd: u32, len: u64) {
-        self.write_event(TraceEvent::DescriptorRead { fd, len });
+    // TODO: These will be called when filesystem interception is implemented
+    #[allow(dead_code)]
+    pub fn record_descriptor_read(&mut self) {
+        self.write_event(TraceEvent::DescriptorRead);
     }
 
-    pub fn record_descriptor_write(&mut self, fd: u32, len: u64) {
-        self.write_event(TraceEvent::DescriptorWrite { fd, len });
+    #[allow(dead_code)]
+    pub fn record_descriptor_write(&mut self) {
+        self.write_event(TraceEvent::DescriptorWrite);
     }
 
-    pub fn record_descriptor_seek(&mut self, fd: u32, offset: i64, whence: String) {
-        self.write_event(TraceEvent::DescriptorSeek { fd, offset, whence });
+    #[allow(dead_code)]
+    pub fn record_descriptor_seek(&mut self) {
+        self.write_event(TraceEvent::DescriptorSeek);
     }
 
-    pub fn record_descriptor_open_at(&mut self, fd: u32, path: String, flags: Vec<String>) {
-        self.write_event(TraceEvent::DescriptorOpenAt { fd, path, flags });
+    #[allow(dead_code)]
+    pub fn record_descriptor_open_at(&mut self) {
+        self.write_event(TraceEvent::DescriptorOpenAt);
     }
 
     pub fn save(mut self) -> Result<()> {
