@@ -39,7 +39,7 @@
           inherit system;
           overlays = [(import rust-overlay)];
         };
-        lib = pkgs.lib;
+        inherit (pkgs) lib;
 
         rustWithWasmTarget = (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml).override {
           targets = ["wasm32-wasip2"];
@@ -192,13 +192,13 @@
         packages =
           packagesForExamples
           // {
-            c_hello_world-wasm = c_hello_world-wasm;
-            go_hello_world-wasm = go_hello_world-wasm;
-            hello_haskell-wasm = hello_haskell-wasm;
-            hello_python-wasm = hello_python-wasm;
-            fizzbuzz_zig-wasm = fizzbuzz_zig-wasm;
-            js_wordstats-wasm = js_wordstats-wasm;
-            counts-wasm = counts-wasm;
+            inherit c_hello_world-wasm;
+            inherit go_hello_world-wasm;
+            inherit hello_haskell-wasm;
+            inherit hello_python-wasm;
+            inherit fizzbuzz_zig-wasm;
+            inherit js_wordstats-wasm;
+            inherit counts-wasm;
             # wasm-rr is now the default package
             default = wasm-rr;
             # All WASM examples collected in one package
@@ -211,7 +211,7 @@
               )}
             '';
             # Alias for backwards compatibility
-            wasm-rr = wasm-rr;
+            inherit wasm-rr;
             # Documentation
             docs = wasm-rr-docs;
           };
@@ -317,8 +317,7 @@
               echo "All Nix files passed statix checks"
             else
               echo "Statix found issues. Run 'statix fix' to auto-fix some issues"
-              echo "Note: Currently non-blocking to allow gradual improvement"
-              # TODO: Change to 'exit 1' once existing issues are fixed
+              exit 1
             fi
 
             touch $out
