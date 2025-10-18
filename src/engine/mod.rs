@@ -95,7 +95,7 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
 
     // No clock components to add here - wall_clock and monotonic_clock are intercepted
 
-    // Add filesystem components
+    // Add filesystem components (not intercepted for now due to complex trait requirements)
     bindings::sync::filesystem::types::add_to_linker::<T, WasiFilesystem>(linker, |ctx| {
         ctx.filesystem()
     })?;

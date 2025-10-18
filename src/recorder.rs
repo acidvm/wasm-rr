@@ -178,6 +178,22 @@ impl Recorder {
         });
     }
 
+    pub fn record_descriptor_read(&mut self, fd: u32, len: u64) {
+        self.write_event(TraceEvent::DescriptorRead { fd, len });
+    }
+
+    pub fn record_descriptor_write(&mut self, fd: u32, len: u64) {
+        self.write_event(TraceEvent::DescriptorWrite { fd, len });
+    }
+
+    pub fn record_descriptor_seek(&mut self, fd: u32, offset: i64, whence: String) {
+        self.write_event(TraceEvent::DescriptorSeek { fd, offset, whence });
+    }
+
+    pub fn record_descriptor_open_at(&mut self, fd: u32, path: String, flags: Vec<String>) {
+        self.write_event(TraceEvent::DescriptorOpenAt { fd, path, flags });
+    }
+
     pub fn save(mut self) -> Result<()> {
         if let Some(error) = self.error.take() {
             return Err(error);

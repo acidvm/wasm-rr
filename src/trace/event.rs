@@ -41,4 +41,25 @@ pub enum TraceEvent {
         headers: Vec<(String, String)>,
         body: Vec<u8>,
     },
+    // Filesystem operations (non-deterministic for now)
+    DescriptorRead {
+        fd: u32,
+        len: u64,
+        // We don't store the actual data yet, just log the operation
+    },
+    DescriptorWrite {
+        fd: u32,
+        len: u64,
+        // We don't store the actual data yet, just log the operation
+    },
+    DescriptorSeek {
+        fd: u32,
+        offset: i64,
+        whence: String,
+    },
+    DescriptorOpenAt {
+        fd: u32,
+        path: String,
+        flags: Vec<String>,
+    },
 }
