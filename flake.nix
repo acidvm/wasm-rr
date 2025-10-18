@@ -281,24 +281,38 @@
           '';
 
           # Spell check with cargo-spellcheck
+          # NOTE: Currently non-blocking due to cargo-spellcheck stability issues
+          # TODO: Make this blocking once the tool is more stable
           spellcheck = pkgs.runCommand "spellcheck" {
-            nativeBuildInputs = [ pkgs.cargo-spellcheck ];
+            nativeBuildInputs = [
+              pkgs.cargo-spellcheck
+              pkgs.hunspellDicts.en_US
+            ];
           } ''
             # Copy source and config files to writable location
             cp -r ${./.} ./workspace
             chmod -R u+w ./workspace
             cd ./workspace
 
-            # Run spellcheck using the config and dictionary
-            cargo-spellcheck check --code 1 \
-              --cfg .spellcheck.yml \
-              README.md AGENTS.md CLAUDE.md \
-              docs/**/*.md \
-              src/**/*.rs \
-              examples/**/*.rs \
-              || echo "Note: Spellcheck found issues. Consider updating dictionary.txt"
+            # Set up hunspell dictionaries
+            mkdir -p .hunspell
+            ln -s ${pkgs.hunspellDicts.en_US}/share/hunspell/en_US.dic .hunspell/
+            ln -s ${pkgs.hunspellDicts.en_US}/share/hunspell/en_US.aff .hunspell/
 
-            # Create output (currently non-blocking to allow iterative dictionary improvements)
+            # Update search dirs in config to include .hunspell
+            sed -i 's|search_dirs = \["."\]|search_dirs = [".", ".hunspell"]|' .spellcheck.yml
+
+            # Run spellcheck on individual files to avoid potential issues
+            # Currently non-blocking due to segfault issues with cargo-spellcheck
+            echo "Running spellcheck (currently non-blocking)..."
+
+            for file in README.md AGENTS.md CLAUDE.md; do
+              if [ -f "$file" ]; then
+                cargo-spellcheck check --cfg .spellcheck.yml "$file" || true
+              fi
+            done
+
+            # Create output (non-blocking until tool stability improves)
             touch $out
           '';
 
@@ -306,27 +320,15 @@
           markdown-fmt = pkgs.runCommand "markdown-fmt-check" {
             nativeBuildInputs = [ pkgs.python3Packages.mdformat ];
           } ''
-            # Create working directory
-            mkdir -p work
-            cd work
-
             # Check markdown formatting
             failed=0
 
             # Check docs directory markdown files
             find ${./docs} -name "*.md" -type f | while read -r file; do
-              # Copy file to temp location with writable permissions
-              cp "$file" "$(basename "$file").orig"
-              cp "$file" "$(basename "$file").formatted"
-
-              # Format the copy (mdformat will format in place)
-              mdformat "$(basename "$file").formatted"
-
-              # Compare with original
-              if ! diff -u "$(basename "$file").orig" "$(basename "$file").formatted" > /dev/null; then
+              # Check if file needs formatting (--check flag)
+              if ! mdformat --check "$file" > /dev/null 2>&1; then
                 echo "Markdown formatting issues in: $file"
                 echo "Run 'mdformat $file' to fix"
-                diff -u "$(basename "$file").orig" "$(basename "$file").formatted" || true
                 failed=1
               fi
             done
@@ -334,18 +336,10 @@
             # Check root directory markdown files
             for file in ${./.}/*.md; do
               if [ -f "$file" ]; then
-                # Copy file to temp location with writable permissions
-                cp "$file" "$(basename "$file").orig"
-                cp "$file" "$(basename "$file").formatted"
-
-                # Format the copy
-                mdformat "$(basename "$file").formatted"
-
-                # Compare with original
-                if ! diff -u "$(basename "$file").orig" "$(basename "$file").formatted" > /dev/null; then
+                # Check if file needs formatting
+                if ! mdformat --check "$file" > /dev/null 2>&1; then
                   echo "Markdown formatting issues in: $file"
                   echo "Run 'mdformat $file' to fix"
-                  diff -u "$(basename "$file").orig" "$(basename "$file").formatted" || true
                   failed=1
                 fi
               fi

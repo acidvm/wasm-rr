@@ -1,7 +1,4 @@
-# Custom dictionary for wasm-rr project
-# Add project-specific terms and technical words here
-
-# Project-specific terms
+215
 wasm
 rr
 wasip1
@@ -11,8 +8,6 @@ wasi
 wasip
 acidvm
 lemmih
-
-# WebAssembly and WASI terms
 WebAssembly
 WASI
 WASIP
@@ -25,8 +20,6 @@ envs
 argv
 preopened
 preopens
-
-# Rust-specific terms
 rustup
 rustc
 cargo
@@ -69,8 +62,7 @@ isize
 CamelCase
 SCREAMING_SNAKE_CASE
 snake_case
-
-# Nix-specific terms
+cfg
 nix
 nixpkgs
 flake
@@ -84,8 +76,7 @@ buildInputs
 nativeBuildInputs
 installPhase
 buildPhase
-
-# Development tools
+pkgs
 gh
 git
 github
@@ -100,8 +91,6 @@ mdbook
 mdformat
 shellcheck
 spellcheck
-
-# Example and test terms
 fizzbuzz
 wordstats
 haskell
@@ -125,8 +114,6 @@ fixtures
 auth
 OAuth
 JWT
-
-# HTTP and networking
 http
 https
 url
@@ -141,8 +128,6 @@ endpoint
 endpoints
 backend
 frontend
-
-# File formats and paths
 json
 yaml
 yml
@@ -152,9 +137,6 @@ pdf
 xlsx
 EOF
 HEREDOC
-
-# Common abbreviations
-repo
 config
 configs
 env
@@ -168,14 +150,11 @@ dest
 lib
 libs
 pkg
-pkgs
 dev
 prod
 ctx
 CtxRecorder
 CtxPlayback
-
-# Documentation terms
 README
 CLAUDE
 AGENTS
@@ -183,8 +162,6 @@ SUMMARY
 TODO
 TODOs
 WIP
-
-# Other technical terms
 runtime
 toolchain
 toolchains
@@ -199,8 +176,6 @@ symlinks
 plugin
 plugins
 middleware
-backend
-frontend
 workflow
 workflows
 subcommand
@@ -211,5 +186,32 @@ multiline
 inline
 boolean
 booleans
-config
-configs
+wasmcomponent
+wasmcomponents
+println
+eprintln
+unwrap
+Ok
+Err
+Some
+None
+Result
+Option
+Box
+Rc
+Arc
+RefCell
+Mutex
+RwLock
+HashMap
+HashSet
+BTreeMap
+BTreeSet
+iter
+println
+eprintln
+dbg
+todo
+unimplemented
+unreachable
+panic

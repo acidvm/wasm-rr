@@ -1,49 +1,14 @@
-# Configuration for cargo-spellcheck
-# See: https://github.com/drahnr/cargo-spellcheck
+# Spellcheck configuration for cargo-spellcheck
 
-# Language settings
+[Hunspell]
+# Language setting
 lang = "en_US"
 
-# Search paths for files to check
-paths = [
-  "**/*.rs",
-  "**/*.md",
-  "**/*.toml",
-  "Cargo.toml",
-]
-
-# Ignore paths
-filters = [
-  # Skip target and result directories
-  "!target/**/*",
-  "!result/**/*",
-  "!.git/**/*",
-  "!*.lock",
-]
-
-# Dictionary configuration
-[Hunspell]
-# Use the custom dictionary for project-specific terms
+# Additional dictionaries for project-specific terms
 extra_dictionaries = ["dictionary.txt"]
 
-# Search configuration for dictionaries
+# Where to search for dictionaries
 search_dirs = ["."]
 
-# Transform rules for words
-transform_regex = [
-  # Remove Rust-style lifetimes
-  ["'[a-z]+", ""],
-  # Remove markdown code block indicators
-  ["^```.*", ""],
-]
-
-# Filter configuration
-[Filters]
-# Filter for code blocks
-code = 1
-# Filter for inline code
-inline_code = 1
-# HTML elements
-html = 1
-# URL filtering
-urls = 1
+# Skip OS dictionary lookups to be more deterministic
+skip_os_lookups = true
