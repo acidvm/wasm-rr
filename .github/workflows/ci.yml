@@ -16,12 +16,17 @@ jobs:
         # on open source projects with limited Actions budget.
         runner: [ubuntu-latest]
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/flakehub-cache-action@main
 
       # - name: Enable Magic Nix Cache
       #   uses: DeterminateSystems/magic-nix-cache-action@main
