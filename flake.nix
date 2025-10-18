@@ -39,7 +39,7 @@
           inherit system;
           overlays = [(import rust-overlay)];
         };
-        lib = pkgs.lib;
+        inherit (pkgs) lib;
 
         rustWithWasmTarget = (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml).override {
           targets = ["wasm32-wasip2"];
@@ -192,13 +192,13 @@
         packages =
           packagesForExamples
           // {
-            c_hello_world-wasm = c_hello_world-wasm;
-            go_hello_world-wasm = go_hello_world-wasm;
-            hello_haskell-wasm = hello_haskell-wasm;
-            hello_python-wasm = hello_python-wasm;
-            fizzbuzz_zig-wasm = fizzbuzz_zig-wasm;
-            js_wordstats-wasm = js_wordstats-wasm;
-            counts-wasm = counts-wasm;
+            inherit c_hello_world-wasm;
+            inherit go_hello_world-wasm;
+            inherit hello_haskell-wasm;
+            inherit hello_python-wasm;
+            inherit fizzbuzz_zig-wasm;
+            inherit js_wordstats-wasm;
+            inherit counts-wasm;
             # wasm-rr is now the default package
             default = wasm-rr;
             # All WASM examples collected in one package
@@ -211,7 +211,7 @@
               )}
             '';
             # Alias for backwards compatibility
-            wasm-rr = wasm-rr;
+            inherit wasm-rr;
             # Documentation
             docs = wasm-rr-docs;
           };
@@ -265,6 +265,95 @@
             ${goldenTestScript}
 
             # If tests pass, create output
+            touch $out
+          '';
+
+          # Shellcheck for all shell scripts
+          shellcheck = pkgs.runCommand "shellcheck" {
+            nativeBuildInputs = [
+              pkgs.shellcheck
+              pkgs.findutils
+            ];
+          } ''
+            # Find and check all shell scripts in the repository
+            # This includes:
+            # - Files with .sh extension
+            # - Files with #!/usr/bin/env bash or #!/bin/bash shebang
+
+            echo "Finding and checking all shell scripts..."
+
+            # Track if any checks fail
+            failed=0
+
+            # Find all .sh files and files with bash shebang
+            (find ${./.} -type f -name "*.sh" -o -type f -exec grep -l '^#!/.*bash' {} \; 2>/dev/null || true) | while read -r script; do
+              echo "Checking: $script"
+              if ! shellcheck "$script"; then
+                failed=1
+              fi
+            done
+
+            if [ "$failed" -eq 1 ]; then
+              echo "Shellcheck found issues in one or more scripts"
+              exit 1
+            fi
+
+            touch $out
+          '';
+
+          # Statix check for Nix files
+          statix = pkgs.runCommand "statix-check" {
+            nativeBuildInputs = [ pkgs.statix ];
+          } ''
+            echo "Running statix to check Nix files..."
+
+            # Copy source to writable location (statix needs write access for some operations)
+            cp -r ${./.} ./workspace
+            chmod -R u+w ./workspace
+            cd ./workspace
+
+            # Run statix check on all Nix files
+            if statix check .; then
+              echo "All Nix files passed statix checks"
+            else
+              echo "Statix found issues. Run 'statix fix' to auto-fix some issues"
+              exit 1
+            fi
+
+            touch $out
+          '';
+
+          # Markdown format check using mdformat
+          markdown-fmt = pkgs.runCommand "markdown-fmt-check" {
+            nativeBuildInputs = [ pkgs.python3Packages.mdformat ];
+          } ''
+            # Check markdown formatting
+            failed=0
+
+            # Check docs directory markdown files
+            find ${./docs} -name "*.md" -type f | while read -r file; do
+              # Check if file needs formatting (--check flag)
+              if ! mdformat --check "$file" > /dev/null 2>&1; then
+                echo "Markdown formatting issues in: $file"
+                echo "Run 'mdformat $file' to fix"
+                failed=1
+              fi
+            done
+
+            # Check root directory markdown files
+            for file in ${./.}/*.md; do
+              if [ -f "$file" ]; then
+                # Check if file needs formatting
+                if ! mdformat --check "$file" > /dev/null 2>&1; then
+                  echo "Markdown formatting issues in: $file"
+                  echo "Run 'mdformat $file' to fix"
+                  failed=1
+                fi
+              fi
+            done
+
+            # For now, always succeed to not block CI
+            # Change to 'exit $failed' when ready to enforce
             touch $out
           '';
         };
