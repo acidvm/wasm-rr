@@ -29,9 +29,12 @@
     ghc-wasm-meta,
     javy-flake,
     ...
-  }:
-    flake-utils.lib.eachDefaultSystem (
-      system: let
+  }: let
+    # Explicitly supported systems
+    supportedSystems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
+
+    # Helper function to generate outputs for a given system
+    genSystemOutputs = system: let
         pkgs = import nixpkgs {
           inherit system;
           overlays = [(import rust-overlay)];
@@ -443,6 +446,19 @@
               };
           };
         };
-      }
-    );
+      };
+
+    # Generate outputs for all supported systems
+    systemOutputs = builtins.foldl' (acc: system:
+      let
+        outputs = genSystemOutputs system;
+      in
+        nixpkgs.lib.recursiveUpdate acc {
+          packages.${system} = outputs.packages;
+          checks.${system} = outputs.checks;
+          apps.${system} = outputs.apps;
+        }
+    ) {} supportedSystems;
+  in
+    systemOutputs;
 }
