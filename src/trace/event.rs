@@ -33,6 +33,7 @@ pub enum TraceEvent {
     RandomU64 {
         value: u64,
     },
+    Read,
     HttpResponse {
         request_method: String,
         request_url: String,

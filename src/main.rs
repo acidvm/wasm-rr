@@ -34,7 +34,7 @@ use std::path::{Path, PathBuf};
 use trace::{convert, TraceFormat};
 use wasmtime::component::Component;
 use wasmtime::Store;
-use wasmtime_wasi::p2::bindings::{cli, clocks, random};
+use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem, sync::io::streams};
 use wasmtime_wasi::WasiView;
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -146,6 +146,12 @@ where
         + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
+        + filesystem::types::Host
+        + filesystem::types::HostDescriptor
+        + filesystem::types::HostDirectoryEntryStream
+        + streams::Host
+        + streams::HostInputStream
+        + streams::HostOutputStream
         + 'static,
 {
     let wasm_path = wasm_path.as_ref();
