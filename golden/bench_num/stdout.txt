@@ -1,6 +1,14 @@
-Testing bigint_multiply_fib100
-Success
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_multiply_fib100/new": failed to find a pre-opened file descriptor through which "target/criterion/bigint_multiply_fib100/new" could be opened
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_multiply_fib100/new/tukey.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_multiply_fib100/new/tukey.json" could be opened
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_multiply_fib100/new/sample.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_multiply_fib100/new/sample.json" could be opened
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_multiply_fib100/new/estimates.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_multiply_fib100/new/estimates.json" could be opened
+bigint_multiply_fib100  time:   [238.40 ns 243.65 ns 244.97 ns]
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_multiply_fib100/new/benchmark.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_multiply_fib100/new/benchmark.json" could be opened
 
-Testing bigint_fibonacci_50
-Success
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_fibonacci_50/new": failed to find a pre-opened file descriptor through which "target/criterion/bigint_fibonacci_50/new" could be opened
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_fibonacci_50/new/tukey.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_fibonacci_50/new/tukey.json" could be opened
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_fibonacci_50/new/sample.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_fibonacci_50/new/sample.json" could be opened
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_fibonacci_50/new/estimates.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_fibonacci_50/new/estimates.json" could be opened
+bigint_fibonacci_50     time:   [11.934 µs 11.943 µs 11.945 µs]
+Criterion.rs ERROR: error: Failed to access file "target/criterion/bigint_fibonacci_50/new/benchmark.json": failed to find a pre-opened file descriptor through which "target/criterion/bigint_fibonacci_50/new/benchmark.json" could be opened
 
