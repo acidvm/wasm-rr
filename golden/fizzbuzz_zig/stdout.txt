@@ -1,4 +1,4 @@
-Playing FizzBuzz with 25 numbers:
+Playing FizzBuzz with 28 numbers:
 1
 2
 Fizz
@@ -24,3 +24,6 @@ Fizz
 23
 Fizz
 Buzz
+26
+Fizz
+28

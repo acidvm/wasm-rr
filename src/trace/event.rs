@@ -1,5 +1,25 @@
 use serde::{Deserialize, Serialize};
 
+/// Helper module for hex encoding/decoding Vec<u8>
+mod hex_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&hex::encode(bytes))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        hex::decode(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 /// A single trace event recorded during execution
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "call", rename_all = "snake_case")]
@@ -28,6 +48,7 @@ pub enum TraceEvent {
         path: Option<String>,
     },
     RandomBytes {
+        #[serde(with = "hex_serde")]
         bytes: Vec<u8>,
     },
     RandomU64 {
@@ -40,6 +61,7 @@ pub enum TraceEvent {
         request_headers: Vec<(String, String)>,
         status: u16,
         headers: Vec<(String, String)>,
+        #[serde(with = "hex_serde")]
         body: Vec<u8>,
     },
 }

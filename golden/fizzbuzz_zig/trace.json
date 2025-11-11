@@ -1,27 +1,5 @@
-{
-  "events": [
-    {
-      "call": "clock_now",
-      "seconds": 1760638928,
-      "nanoseconds": 53906000
-    },
-    {
-      "call": "random_bytes",
-      "bytes": [
-        212,
-        9,
-        47,
-        204,
-        55,
-        239,
-        33,
-        22
-      ]
-    },
-    {
-      "call": "clock_now",
-      "seconds": 1760638928,
-      "nanoseconds": 56173000
-    }
-  ]
-}
+{"events":[
+{"call":"clock_now","seconds":1762514870,"nanoseconds":604464000},
+{"call":"random_bytes","bytes":"80d8b46b521e9273"},
+{"call":"clock_now","seconds":1762514870,"nanoseconds":605313000}
+]}
