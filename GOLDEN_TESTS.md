@@ -46,12 +46,12 @@ cargo run -- replay result/print_args.wasm golden/print_args/trace.json > golden
 
 #### `bench_num`
 
-Runs Criterion benchmarks with quick mode.
+Runs Criterion benchmarks with quick mode and discarded baseline.
 
 **Generation:**
 ```bash
 nix build .#bench_num-wasm
-cargo run -- record result/bench_num.wasm -t golden/bench_num/trace.json -- --bench --quick
+cargo run -- record result/bench_num.wasm -t golden/bench_num/trace.json -- --bench --quick --discard-baseline
 cargo run -- replay result/bench_num.wasm golden/bench_num/trace.json > golden/bench_num/stdout.txt 2> golden/bench_num/stderr.txt
 ```
 
