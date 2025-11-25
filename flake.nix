@@ -188,6 +188,11 @@
             ''export ${lib.strings.toUpper name}_WASM="${pkg}/${name}.wasm"''
           ) allWasmComponents
         );
+
+        # Build coverage report
+        coverage-report = import ./nix/coverage.nix {
+          inherit pkgs lib craneLib allWasmComponents wasmEnvVars goldenTestScript;
+        };
       in {
         packages =
           packagesForExamples
@@ -214,6 +219,8 @@
             inherit wasm-rr;
             # Documentation
             docs = wasm-rr-docs;
+            # Code coverage report
+            coverage = coverage-report;
           };
 
         checks = {
