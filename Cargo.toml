@@ -8,7 +8,7 @@ name = "wasm-rr"
 path = "src/main.rs"
 
 [dependencies]
-wasmtime = { version = "37.0.2", default-features = false, features = ["component-model", "std", "cranelift"] }
+wasmtime = { version = "39.0.1", default-features = false, features = ["component-model", "std", "cranelift"] }
 wasmtime-wasi = { version = "37.0.2" }
 wasmtime-wasi-http = { version = "37.0.2" }
 anyhow = "1.0"
