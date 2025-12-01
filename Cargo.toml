@@ -12,7 +12,7 @@ wasmtime = { version = "37.0.2", default-features = false, features = ["componen
 wasmtime-wasi = { version = "37.0.2" }
 wasmtime-wasi-http = { version = "37.0.2" }
 anyhow = "1.0"
-wasmtime-wasi-io = "37.0.1"
+wasmtime-wasi-io = "39.0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ciborium = "0.2"
