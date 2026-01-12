@@ -26,4 +26,4 @@ hex = "0.4"
 [dev-dependencies]
 quickcheck = "1.0"
 quickcheck_macros = "1.0"
-tempfile = "3.0"
+tempfile = "3.24"
