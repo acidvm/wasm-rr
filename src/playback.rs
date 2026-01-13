@@ -338,7 +338,7 @@ impl WasiHttpView for CtxPlayback {
         // implement From<Infallible>.
         let boxed_body = Full::new(Bytes::from(body))
             .map_err(|e: std::convert::Infallible| match e {})
-            .boxed();
+            .boxed_unsync();
 
         let response = builder.body(boxed_body).map_err(HttpError::trap)?;
 

@@ -292,7 +292,7 @@ impl WasiHttpView for CtxRecorder {
         // implement From<Infallible>.
         let boxed_body = Full::new(Bytes::from(body_vec))
             .map_err(|e: std::convert::Infallible| match e {})
-            .boxed();
+            .boxed_unsync();
 
         let mut builder = hyper::Response::builder().status(parts.status);
         *builder
