@@ -167,6 +167,45 @@ impl Playback {
         }
     }
 
+    pub fn next_insecure_random_bytes(&mut self, expected_len: u64) -> Result<Vec<u8>> {
+        match self.next_event()? {
+            TraceEvent::InsecureRandomBytes { bytes } => {
+                if bytes.len() as u64 != expected_len {
+                    return Err(anyhow!(
+                        "insecure random bytes length mismatch: expected {}, got {}",
+                        expected_len,
+                        bytes.len()
+                    ));
+                }
+                Ok(bytes)
+            }
+            other => Err(anyhow!(
+                "expected next insecure_random_bytes event, got {:?}",
+                other
+            )),
+        }
+    }
+
+    pub fn next_insecure_random_u64(&mut self) -> Result<u64> {
+        match self.next_event()? {
+            TraceEvent::InsecureRandomU64 { value } => Ok(value),
+            other => Err(anyhow!(
+                "expected next insecure_random_u64 event, got {:?}",
+                other
+            )),
+        }
+    }
+
+    pub fn next_insecure_seed(&mut self) -> Result<(u64, u64)> {
+        match self.next_event()? {
+            TraceEvent::InsecureSeed { seed } => Ok(seed),
+            other => Err(anyhow!(
+                "expected next insecure_seed event, got {:?}",
+                other
+            )),
+        }
+    }
+
     pub fn expect_read_event(&mut self) -> Result<()> {
         match self.next_event() {
             Ok(TraceEvent::Read) => Ok(()),
@@ -419,6 +458,22 @@ impl random::random::Host for CtxPlayback {
 
     fn get_random_u64(&mut self) -> anyhow::Result<u64> {
         self.playback.next_random_u64()
+    }
+}
+
+impl random::insecure::Host for CtxPlayback {
+    fn get_insecure_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+        self.playback.next_insecure_random_bytes(len)
+    }
+
+    fn get_insecure_random_u64(&mut self) -> anyhow::Result<u64> {
+        self.playback.next_insecure_random_u64()
+    }
+}
+
+impl random::insecure_seed::Host for CtxPlayback {
+    fn insecure_seed(&mut self) -> anyhow::Result<(u64, u64)> {
+        self.playback.next_insecure_seed()
     }
 }
 
