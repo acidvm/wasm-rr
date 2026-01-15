@@ -2,3 +2,4 @@ component = "hello_python"
 trace = "trace.json"
 stdout = "stdout.txt"
 stderr = "stderr.txt"
+must_fail = true
