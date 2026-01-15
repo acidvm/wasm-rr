@@ -19,8 +19,9 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
-use crate::trace::{TraceEvent, TraceFile, TraceFormat};
-use crate::util::cbor::is_cbor_eof;
+use wasm_rr::trace::{TraceEvent, TraceFile, TraceFormat};
+use wasm_rr::util::cbor::is_cbor_eof;
+
 use crate::wasi::util::{header_map_from_pairs, sorted_headers};
 use anyhow::Result;
 
@@ -167,14 +168,29 @@ impl Playback {
         }
     }
 
-    pub fn expect_read_event(&mut self) -> Result<()> {
-        match self.next_event() {
-            Ok(TraceEvent::Read) => Ok(()),
-            Ok(other) => Err(anyhow!(
-                "expected next filesystem event to be 'read', got {:?}",
-                other
+    /// Get the next stream read result
+    /// Returns Ok((data, eof)) where eof indicates if the stream is closed
+    pub fn next_stream_read(&mut self) -> Result<(Vec<u8>, bool)> {
+        match self.next_event()? {
+            TraceEvent::StreamRead { data, eof } => Ok((data, eof)),
+            // For backward compatibility, also accept legacy Read events
+            // but return empty data (caller should fall back to actual read)
+            TraceEvent::Read => Err(anyhow!(
+                "legacy Read event found - cannot replay without recorded data"
             )),
-            Err(err) => Err(err),
+            other => Err(anyhow!("expected next stream_read event, got {:?}", other)),
+        }
+    }
+
+    /// Get the next file read data
+    pub fn next_file_read(&mut self) -> Result<(Vec<u8>, bool)> {
+        match self.next_event()? {
+            TraceEvent::FileRead { data, eof } => Ok((data, eof)),
+            // For backward compatibility, also accept legacy Read events
+            TraceEvent::Read => Err(anyhow!(
+                "legacy Read event found - cannot replay without recorded data"
+            )),
+            other => Err(anyhow!("expected next file_read event, got {:?}", other)),
         }
     }
 
@@ -207,9 +223,15 @@ impl Playback {
     }
 
     pub fn finish(mut self) -> Result<()> {
+        // Helper to check if an event is a "skippable" read event
+        // Legacy Read events can be skipped for backward compatibility
+        fn is_skippable(event: &TraceEvent) -> bool {
+            matches!(event, TraceEvent::Read)
+        }
+
         match &mut self.source {
             PlaybackSource::Memory(events) => {
-                if events.iter().all(|event| matches!(event, TraceEvent::Read)) {
+                if events.iter().all(is_skippable) {
                     events.clear();
                     Ok(())
                 } else {
@@ -221,7 +243,7 @@ impl Playback {
             }
             PlaybackSource::Stream(reader) => loop {
                 match ciborium::from_reader::<TraceEvent, _>(&mut *reader) {
-                    Ok(TraceEvent::Read) => continue,
+                    Ok(ref event) if is_skippable(event) => continue,
                     Ok(event) => {
                         return Err(anyhow!(
                             "trace contains unused events, starting with: {:?}",
@@ -435,24 +457,30 @@ impl streams::HostInputStream for CtxPlayback {
         <ResourceTable as streams::HostInputStream>::drop(view.table, stream)
     }
 
-    fn read(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-        self.playback
-            .expect_read_event()
-            .map_err(|err| StreamError::trap(&err.to_string()))?;
-        let view = WasiView::ctx(self);
-        <ResourceTable as streams::HostInputStream>::read(view.table, stream, len)
+    fn read(
+        &mut self,
+        _stream: Resource<streams::InputStream>,
+        _len: u64,
+    ) -> StreamResult<Vec<u8>> {
+        // Return the recorded data instead of reading from the actual stream
+        match self.playback.next_stream_read() {
+            Ok((data, false)) => Ok(data),
+            Ok((_, true)) => Err(StreamError::Closed),
+            Err(err) => Err(StreamError::trap(&err.to_string())),
+        }
     }
 
     fn blocking_read(
         &mut self,
-        stream: Resource<streams::InputStream>,
-        len: u64,
+        _stream: Resource<streams::InputStream>,
+        _len: u64,
     ) -> StreamResult<Vec<u8>> {
-        self.playback
-            .expect_read_event()
-            .map_err(|err| StreamError::trap(&err.to_string()))?;
-        let view = WasiView::ctx(self);
-        <ResourceTable as streams::HostInputStream>::blocking_read(view.table, stream, len)
+        // Return the recorded data instead of reading from the actual stream
+        match self.playback.next_stream_read() {
+            Ok((data, false)) => Ok(data),
+            Ok((_, true)) => Err(StreamError::Closed),
+            Err(err) => Err(StreamError::trap(&err.to_string())),
+        }
     }
 
     fn skip(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<u64> {
@@ -632,12 +660,12 @@ impl filesystem::types::HostDescriptor for CtxPlayback {
 
     fn read(
         &mut self,
-        fd: Resource<filesystem::types::Descriptor>,
-        len: filesystem::types::Filesize,
-        offset: filesystem::types::Filesize,
+        _fd: Resource<filesystem::types::Descriptor>,
+        _len: filesystem::types::Filesize,
+        _offset: filesystem::types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
-        self.playback.expect_read_event().map_err(FsError::trap)?;
-        self.filesystem().read(fd, len, offset)
+        // Return the recorded data instead of reading from the actual filesystem
+        self.playback.next_file_read().map_err(FsError::trap)
     }
 
     fn write(

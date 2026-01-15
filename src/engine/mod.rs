@@ -153,5 +153,16 @@ pub fn build_wasi_ctx(wasm_path: &Path, args: &[String]) -> WasiCtx {
         builder.arg(arg);
     }
 
+    // Preopen common directories for file access
+    // Note: In a production system, this should be more restrictive
+    if let Ok(cwd) = std::env::current_dir() {
+        let _ = builder.preopened_dir(
+            &cwd,
+            "/",
+            wasmtime_wasi::DirPerms::READ,
+            wasmtime_wasi::FilePerms::READ,
+        );
+    }
+
     builder.build()
 }

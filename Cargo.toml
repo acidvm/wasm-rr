@@ -3,6 +3,10 @@ name = "wasm-rr"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "wasm_rr"
+path = "src/lib.rs"
+
 [[bin]]
 name = "wasm-rr"
 path = "src/main.rs"

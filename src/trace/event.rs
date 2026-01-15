@@ -54,7 +54,22 @@ pub enum TraceEvent {
     RandomU64 {
         value: u64,
     },
+    /// Legacy read marker - kept for backward compatibility
     Read,
+    /// Stream read with actual data (for wasi:io/streams InputStream)
+    /// Empty data with eof=true indicates stream closed
+    StreamRead {
+        #[serde(with = "hex_serde")]
+        data: Vec<u8>,
+        #[serde(default)]
+        eof: bool,
+    },
+    /// File read with actual data (for wasi:filesystem/types Descriptor::read)
+    FileRead {
+        #[serde(with = "hex_serde")]
+        data: Vec<u8>,
+        eof: bool,
+    },
     HttpResponse {
         request_method: String,
         request_url: String,
