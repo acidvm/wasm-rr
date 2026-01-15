@@ -162,6 +162,18 @@ impl Recorder {
         self.write_event(TraceEvent::RandomU64 { value });
     }
 
+    pub fn record_insecure_random_bytes(&mut self, bytes: Vec<u8>) {
+        self.write_event(TraceEvent::InsecureRandomBytes { bytes });
+    }
+
+    pub fn record_insecure_random_u64(&mut self, value: u64) {
+        self.write_event(TraceEvent::InsecureRandomU64 { value });
+    }
+
+    pub fn record_insecure_seed(&mut self, seed: (u64, u64)) {
+        self.write_event(TraceEvent::InsecureSeed { seed });
+    }
+
     pub fn record_filesystem_read(&mut self) {
         self.write_event(TraceEvent::Read);
     }
@@ -395,6 +407,28 @@ impl random::random::Host for CtxRecorder {
         let value = self.random().get_random_u64()?;
         self.recorder.record_random_u64(value);
         Ok(value)
+    }
+}
+
+impl random::insecure::Host for CtxRecorder {
+    fn get_insecure_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+        let bytes = self.random().get_insecure_random_bytes(len)?;
+        self.recorder.record_insecure_random_bytes(bytes.clone());
+        Ok(bytes)
+    }
+
+    fn get_insecure_random_u64(&mut self) -> anyhow::Result<u64> {
+        let value = self.random().get_insecure_random_u64()?;
+        self.recorder.record_insecure_random_u64(value);
+        Ok(value)
+    }
+}
+
+impl random::insecure_seed::Host for CtxRecorder {
+    fn insecure_seed(&mut self) -> anyhow::Result<(u64, u64)> {
+        let seed = self.random().insecure_seed()?;
+        self.recorder.record_insecure_seed(seed);
+        Ok(seed)
     }
 }
 

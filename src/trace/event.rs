@@ -54,6 +54,16 @@ pub enum TraceEvent {
     RandomU64 {
         value: u64,
     },
+    InsecureRandomBytes {
+        #[serde(with = "hex_serde")]
+        bytes: Vec<u8>,
+    },
+    InsecureRandomU64 {
+        value: u64,
+    },
+    InsecureSeed {
+        seed: (u64, u64),
+    },
     Read,
     HttpResponse {
         request_method: String,

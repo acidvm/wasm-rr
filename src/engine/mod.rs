@@ -29,6 +29,8 @@ where
         + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
+        + random::insecure::Host
+        + random::insecure_seed::Host
         + filesystem::types::Host
         + filesystem::types::HostDescriptor
         + filesystem::types::HostDirectoryEntryStream
@@ -56,6 +58,8 @@ where
     clocks::monotonic_clock::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     cli::environment::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     random::random::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    random::insecure::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
+    random::insecure_seed::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     filesystem::types::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
     streams::add_to_linker::<_, Intercept<T>>(&mut linker, |ctx| ctx)?;
 
@@ -86,7 +90,6 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
     use wasmtime_wasi::cli::{WasiCli, WasiCliView};
     use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView};
     use wasmtime_wasi::p2::bindings;
-    use wasmtime_wasi::random::{WasiRandom, WasiRandomView};
     use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsView};
 
     // Add CLI components (except environment which we intercept)
@@ -109,11 +112,7 @@ fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<
         ctx.filesystem()
     })?;
 
-    // Add random components (except random which we intercept)
-    bindings::sync::random::insecure::add_to_linker::<T, WasiRandom>(linker, |ctx| ctx.random())?;
-    bindings::sync::random::insecure_seed::add_to_linker::<T, WasiRandom>(linker, |ctx| {
-        ctx.random()
-    })?;
+    // Note: random::insecure and random::insecure_seed are intercepted above
 
     // Add socket components
     bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(linker, |ctx| ctx.sockets())?;

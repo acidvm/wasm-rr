@@ -146,6 +146,8 @@ where
         + clocks::monotonic_clock::Host
         + cli::environment::Host
         + random::random::Host
+        + random::insecure::Host
+        + random::insecure_seed::Host
         + filesystem::types::Host
         + filesystem::types::HostDescriptor
         + filesystem::types::HostDirectoryEntryStream
