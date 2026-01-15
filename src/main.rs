@@ -24,14 +24,12 @@
 mod engine;
 mod playback;
 mod recorder;
-mod trace;
-mod util;
 mod wasi;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::{Path, PathBuf};
-use trace::{convert, TraceFormat};
+use wasm_rr::trace::{convert, TraceFormat};
 use wasmtime::component::Component;
 use wasmtime::Store;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem, sync::io::streams};

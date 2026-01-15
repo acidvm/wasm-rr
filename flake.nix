@@ -71,7 +71,7 @@
           "${example}-wasm" = compileRust { name = example; inherit src; };
         };
 
-        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num" "read_stdin"];
+        examples = ["print_time" "print_args" "print_random" "fetch_quote" "bench_num" "read_stdin" "read_file"];
 
         packagesForExamples =
           builtins.foldl' (acc: example: acc // examplePackages example) {}
@@ -132,6 +132,7 @@
           fetch_quote = packagesForExamples."fetch_quote-wasm";
           bench_num = packagesForExamples."bench_num-wasm";
           read_stdin = packagesForExamples."read_stdin-wasm";
+          read_file = packagesForExamples."read_file-wasm";
           c_hello_world = c_hello_world-wasm;
           go_hello_world = go_hello_world-wasm;
           hello_haskell = hello_haskell-wasm;

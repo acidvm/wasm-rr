@@ -20,7 +20,8 @@ use wasmtime_wasi_http::types::{
 };
 use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
 
-use crate::trace::{TraceEvent, TraceFormat};
+use wasm_rr::trace::{TraceEvent, TraceFormat};
+
 use crate::wasi::util::sorted_headers;
 use anyhow::Result;
 
@@ -162,8 +163,12 @@ impl Recorder {
         self.write_event(TraceEvent::RandomU64 { value });
     }
 
-    pub fn record_filesystem_read(&mut self) {
-        self.write_event(TraceEvent::Read);
+    pub fn record_stream_read(&mut self, data: Vec<u8>, eof: bool) {
+        self.write_event(TraceEvent::StreamRead { data, eof });
+    }
+
+    pub fn record_file_read(&mut self, data: Vec<u8>, eof: bool) {
+        self.write_event(TraceEvent::FileRead { data, eof });
     }
 
     pub fn record_http_response(
@@ -412,9 +417,18 @@ impl streams::HostInputStream for CtxRecorder {
     }
 
     fn read(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-        self.recorder.record_filesystem_read();
         let view = WasiView::ctx(self);
-        <ResourceTable as streams::HostInputStream>::read(view.table, stream, len)
+        match <ResourceTable as streams::HostInputStream>::read(view.table, stream, len) {
+            Ok(data) => {
+                self.recorder.record_stream_read(data.clone(), false);
+                Ok(data)
+            }
+            Err(StreamError::Closed) => {
+                self.recorder.record_stream_read(vec![], true);
+                Err(StreamError::Closed)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn blocking_read(
@@ -422,9 +436,18 @@ impl streams::HostInputStream for CtxRecorder {
         stream: Resource<streams::InputStream>,
         len: u64,
     ) -> StreamResult<Vec<u8>> {
-        self.recorder.record_filesystem_read();
         let view = WasiView::ctx(self);
-        <ResourceTable as streams::HostInputStream>::blocking_read(view.table, stream, len)
+        match <ResourceTable as streams::HostInputStream>::blocking_read(view.table, stream, len) {
+            Ok(data) => {
+                self.recorder.record_stream_read(data.clone(), false);
+                Ok(data)
+            }
+            Err(StreamError::Closed) => {
+                self.recorder.record_stream_read(vec![], true);
+                Err(StreamError::Closed)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn skip(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<u64> {
@@ -608,8 +631,9 @@ impl filesystem::types::HostDescriptor for CtxRecorder {
         len: filesystem::types::Filesize,
         offset: filesystem::types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
-        self.recorder.record_filesystem_read();
-        self.filesystem().read(fd, len, offset)
+        let (data, eof) = self.filesystem().read(fd, len, offset)?;
+        self.recorder.record_file_read(data.clone(), eof);
+        Ok((data, eof))
     }
 
     fn write(
