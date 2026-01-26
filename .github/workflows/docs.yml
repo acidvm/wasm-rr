@@ -72,6 +72,6 @@ jobs:
       - name: Deploy PR preview
         # Deploy preview if PR AND (docs changed OR PR closing)
         if: github.event_name == 'pull_request' && (steps.docs-changed.outputs.changed == 'true' || github.event.action == 'closed')
-        uses: rossjrw/pr-preview-action@v1.8.0
+        uses: rossjrw/pr-preview-action@v1.8.1
         with:
           source-dir: ./docs-output
