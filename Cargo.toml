@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 wasmtime = { version = "40", default-features = false, features = ["component-model", "std", "cranelift"] }
-wasmtime-wasi = { version = "40" }
+wasmtime-wasi = { version = "41" }
 wasmtime-wasi-http = { version = "40" }
 anyhow = "1.0"
 wasmtime-wasi-io = "40"
