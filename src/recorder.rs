@@ -11,14 +11,18 @@ use wasmtime_wasi::clocks::WasiClocksView as _;
 use wasmtime_wasi::filesystem::WasiFilesystemView as _;
 use wasmtime_wasi::p2::bindings::sync::io::{poll, streams};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem};
-use wasmtime_wasi::p2::{FsResult, StreamError, StreamResult};
+use wasmtime_wasi::p2::{DynPollable, FsResult, StreamError, StreamResult};
 use wasmtime_wasi::random::WasiRandomView as _;
 use wasmtime_wasi::runtime;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-use wasmtime_wasi_http::types::{
-    default_send_request, HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
+use wasmtime_wasi_http::p2::types::{
+    HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
 };
-use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::p2::{
+    body::HyperOutgoingBody, default_send_request, HttpError, HttpResult, WasiHttpCtxView,
+    WasiHttpHooks, WasiHttpView,
+};
+use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::trace::{TraceEvent, TraceFormat};
 use crate::wasi::util::sorted_headers;
@@ -213,6 +217,10 @@ pub struct CtxRecorder {
     table: ResourceTable,
     wasi: WasiCtx,
     http: WasiHttpCtx,
+    http_hooks: RecorderHttpHooks,
+}
+
+struct RecorderHttpHooks {
     recorder: Recorder,
 }
 
@@ -222,12 +230,12 @@ impl CtxRecorder {
             table: ResourceTable::new(),
             wasi,
             http,
-            recorder,
+            http_hooks: RecorderHttpHooks { recorder },
         }
     }
 
     pub fn into_recorder(self) -> Recorder {
-        self.recorder
+        self.http_hooks.recorder
     }
 }
 
@@ -241,19 +249,21 @@ impl WasiView for CtxRecorder {
 }
 
 impl WasiHttpView for CtxRecorder {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: &mut self.http_hooks,
+        }
     }
+}
 
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-
+impl WasiHttpHooks for RecorderHttpHooks {
     fn send_request(
         &mut self,
-        request: hyper::Request<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
-    ) -> wasmtime_wasi_http::HttpResult<HostFutureIncomingResponse> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         let method = request.method().to_string();
         let url = request.uri().to_string();
         let request_headers = sorted_headers(request.headers())?;
@@ -264,7 +274,7 @@ impl WasiHttpView for CtxRecorder {
             HostFutureIncomingResponse::Pending(handle) => runtime::in_tokio(handle),
             HostFutureIncomingResponse::Ready(res) => res,
             HostFutureIncomingResponse::Consumed => {
-                return Err(HttpError::trap(anyhow!(
+                return Err(HttpError::trap(wasmtime::format_err!(
                     "unexpected consumed HTTP response handle"
                 )))
             }
@@ -307,10 +317,9 @@ impl WasiHttpView for CtxRecorder {
             .boxed_unsync();
 
         let mut builder = hyper::Response::builder().status(parts.status);
-        *builder
-            .headers_mut()
-            .ok_or_else(|| HttpError::trap(anyhow!("failed to access response headers")))? =
-            parts.headers.clone();
+        *builder.headers_mut().ok_or_else(|| {
+            HttpError::trap(wasmtime::format_err!("failed to access response headers"))
+        })? = parts.headers.clone();
 
         let resp = builder.body(boxed_body).map_err(HttpError::trap)?;
 
@@ -325,128 +334,118 @@ impl WasiHttpView for CtxRecorder {
 }
 
 impl clocks::wall_clock::Host for CtxRecorder {
-    fn now(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
+    fn now(&mut self) -> wasmtime::Result<clocks::wall_clock::Datetime> {
         let now = self.clocks().now()?;
-        self.recorder.record_now(&now);
+        self.http_hooks.recorder.record_now(&now);
         Ok(now)
     }
 
-    fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
+    fn resolution(&mut self) -> wasmtime::Result<clocks::wall_clock::Datetime> {
         let resolution = self.clocks().resolution()?;
-        self.recorder.record_resolution(&resolution);
+        self.http_hooks.recorder.record_resolution(&resolution);
         Ok(resolution)
     }
 }
 
 impl clocks::monotonic_clock::Host for CtxRecorder {
-    fn now(&mut self) -> anyhow::Result<u64> {
+    fn now(&mut self) -> wasmtime::Result<u64> {
         let now = self.clocks().now()?;
-        self.recorder.record_monotonic_now(now);
+        self.http_hooks.recorder.record_monotonic_now(now);
         Ok(now)
     }
 
-    fn resolution(&mut self) -> anyhow::Result<u64> {
+    fn resolution(&mut self) -> wasmtime::Result<u64> {
         let resolution = self.clocks().resolution()?;
-        self.recorder.record_monotonic_resolution(resolution);
+        self.http_hooks
+            .recorder
+            .record_monotonic_resolution(resolution);
         Ok(resolution)
     }
 
-    fn subscribe_instant(
-        &mut self,
-        when: u64,
-    ) -> anyhow::Result<
-        wasmtime::component::Resource<
-            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
-        >,
-    > {
+    fn subscribe_instant(&mut self, when: u64) -> wasmtime::Result<Resource<DynPollable>> {
         // Delegate to underlying WasiClocks implementation
         self.clocks().subscribe_instant(when)
     }
 
-    fn subscribe_duration(
-        &mut self,
-        duration: u64,
-    ) -> anyhow::Result<
-        wasmtime::component::Resource<
-            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
-        >,
-    > {
+    fn subscribe_duration(&mut self, duration: u64) -> wasmtime::Result<Resource<DynPollable>> {
         // Delegate to underlying WasiClocks implementation
         self.clocks().subscribe_duration(duration)
     }
 }
 
 impl cli::environment::Host for CtxRecorder {
-    fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
+    fn get_environment(&mut self) -> wasmtime::Result<Vec<(String, String)>> {
         let env = self.cli().get_environment()?;
-        self.recorder.record_environment(env.clone());
+        self.http_hooks.recorder.record_environment(env.clone());
         Ok(env)
     }
 
-    fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
+    fn get_arguments(&mut self) -> wasmtime::Result<Vec<String>> {
         let args = self.cli().get_arguments()?;
-        self.recorder.record_arguments(args.clone());
+        self.http_hooks.recorder.record_arguments(args.clone());
         Ok(args)
     }
 
-    fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
+    fn initial_cwd(&mut self) -> wasmtime::Result<Option<String>> {
         let cwd = self.cli().initial_cwd()?;
-        self.recorder.record_initial_cwd(cwd.clone());
+        self.http_hooks.recorder.record_initial_cwd(cwd.clone());
         Ok(cwd)
     }
 }
 
 impl random::random::Host for CtxRecorder {
-    fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+    fn get_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
         let bytes = self.random().get_random_bytes(len)?;
-        self.recorder.record_random_bytes(bytes.clone());
+        self.http_hooks.recorder.record_random_bytes(bytes.clone());
         Ok(bytes)
     }
 
-    fn get_random_u64(&mut self) -> anyhow::Result<u64> {
+    fn get_random_u64(&mut self) -> wasmtime::Result<u64> {
         let value = self.random().get_random_u64()?;
-        self.recorder.record_random_u64(value);
+        self.http_hooks.recorder.record_random_u64(value);
         Ok(value)
     }
 }
 
 impl random::insecure::Host for CtxRecorder {
-    fn get_insecure_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
+    fn get_insecure_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
         let bytes = self.random().get_insecure_random_bytes(len)?;
-        self.recorder.record_insecure_random_bytes(bytes.clone());
+        self.http_hooks
+            .recorder
+            .record_insecure_random_bytes(bytes.clone());
         Ok(bytes)
     }
 
-    fn get_insecure_random_u64(&mut self) -> anyhow::Result<u64> {
+    fn get_insecure_random_u64(&mut self) -> wasmtime::Result<u64> {
         let value = self.random().get_insecure_random_u64()?;
-        self.recorder.record_insecure_random_u64(value);
+        self.http_hooks.recorder.record_insecure_random_u64(value);
         Ok(value)
     }
 }
 
 impl random::insecure_seed::Host for CtxRecorder {
-    fn insecure_seed(&mut self) -> anyhow::Result<(u64, u64)> {
+    fn insecure_seed(&mut self) -> wasmtime::Result<(u64, u64)> {
         let seed = self.random().insecure_seed()?;
-        self.recorder.record_insecure_seed(seed);
+        self.http_hooks.recorder.record_insecure_seed(seed);
         Ok(seed)
     }
 }
 
 impl streams::Host for CtxRecorder {
-    fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
+    fn convert_stream_error(&mut self, err: StreamError) -> wasmtime::Result<streams::StreamError> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::Host>::convert_stream_error(view.table, err)
     }
 }
 
 impl streams::HostInputStream for CtxRecorder {
-    fn drop(&mut self, stream: Resource<streams::InputStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<streams::InputStream>) -> wasmtime::Result<()> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostInputStream>::drop(view.table, stream)
     }
 
     fn read(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-        self.recorder.record_filesystem_read();
+        self.http_hooks.recorder.record_filesystem_read();
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostInputStream>::read(view.table, stream, len)
     }
@@ -456,7 +455,7 @@ impl streams::HostInputStream for CtxRecorder {
         stream: Resource<streams::InputStream>,
         len: u64,
     ) -> StreamResult<Vec<u8>> {
-        self.recorder.record_filesystem_read();
+        self.http_hooks.recorder.record_filesystem_read();
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostInputStream>::blocking_read(view.table, stream, len)
     }
@@ -478,14 +477,14 @@ impl streams::HostInputStream for CtxRecorder {
     fn subscribe(
         &mut self,
         stream: Resource<streams::InputStream>,
-    ) -> anyhow::Result<Resource<poll::Pollable>> {
+    ) -> wasmtime::Result<Resource<poll::Pollable>> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostInputStream>::subscribe(view.table, stream)
     }
 }
 
 impl streams::HostOutputStream for CtxRecorder {
-    fn drop(&mut self, stream: Resource<streams::OutputStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<streams::OutputStream>) -> wasmtime::Result<()> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostOutputStream>::drop(view.table, stream)
     }
@@ -529,7 +528,7 @@ impl streams::HostOutputStream for CtxRecorder {
     fn subscribe(
         &mut self,
         stream: Resource<streams::OutputStream>,
-    ) -> anyhow::Result<Resource<poll::Pollable>> {
+    ) -> wasmtime::Result<Resource<poll::Pollable>> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostOutputStream>::subscribe(view.table, stream)
     }
@@ -578,14 +577,14 @@ impl filesystem::types::Host for CtxRecorder {
     fn convert_error_code(
         &mut self,
         err: wasmtime_wasi::p2::FsError,
-    ) -> anyhow::Result<filesystem::types::ErrorCode> {
+    ) -> wasmtime::Result<filesystem::types::ErrorCode> {
         self.filesystem().convert_error_code(err)
     }
 
     fn filesystem_error_code(
         &mut self,
         err: Resource<streams::Error>,
-    ) -> anyhow::Result<Option<filesystem::types::ErrorCode>> {
+    ) -> wasmtime::Result<Option<filesystem::types::ErrorCode>> {
         self.filesystem().filesystem_error_code(err)
     }
 }
@@ -642,7 +641,7 @@ impl filesystem::types::HostDescriptor for CtxRecorder {
         len: filesystem::types::Filesize,
         offset: filesystem::types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
-        self.recorder.record_filesystem_read();
+        self.http_hooks.recorder.record_filesystem_read();
         self.filesystem().read(fd, len, offset)
     }
 
@@ -726,7 +725,7 @@ impl filesystem::types::HostDescriptor for CtxRecorder {
             .open_at(fd, path_flags, path, open_flags, descriptor_flags)
     }
 
-    fn drop(&mut self, fd: Resource<filesystem::types::Descriptor>) -> anyhow::Result<()> {
+    fn drop(&mut self, fd: Resource<filesystem::types::Descriptor>) -> wasmtime::Result<()> {
         let mut fs = self.filesystem();
         filesystem::types::HostDescriptor::drop(&mut fs, fd)
     }
@@ -801,7 +800,7 @@ impl filesystem::types::HostDescriptor for CtxRecorder {
         &mut self,
         a: Resource<filesystem::types::Descriptor>,
         b: Resource<filesystem::types::Descriptor>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         self.filesystem().is_same_object(a, b)
     }
 
@@ -833,7 +832,7 @@ impl filesystem::types::HostDirectoryEntryStream for CtxRecorder {
     fn drop(
         &mut self,
         stream: Resource<filesystem::types::DirectoryEntryStream>,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         let mut fs = self.filesystem();
         filesystem::types::HostDirectoryEntryStream::drop(&mut fs, stream)
     }

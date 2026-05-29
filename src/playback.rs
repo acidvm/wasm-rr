@@ -12,17 +12,24 @@ use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::filesystem::WasiFilesystemView as _;
 use wasmtime_wasi::p2::bindings::sync::io::{poll, streams};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem};
-use wasmtime_wasi::p2::{FsError, FsResult, StreamError, StreamResult};
+use wasmtime_wasi::p2::{DynPollable, FsError, FsResult, StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
-use wasmtime_wasi_http::types::{
+use wasmtime_wasi_http::p2::types::{
     HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
 };
-use wasmtime_wasi_http::{HttpError, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::p2::{
+    body::HyperOutgoingBody, HttpError, HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
+};
+use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::trace::{TraceEvent, TraceFile, TraceFormat};
 use crate::util::cbor::is_cbor_eof;
 use crate::wasi::util::{header_map_from_pairs, sorted_headers};
 use anyhow::Result;
+
+fn to_wasmtime_error(err: anyhow::Error) -> wasmtime::Error {
+    wasmtime::format_err!(err)
+}
 
 enum PlaybackSource {
     /// All events loaded in memory (used for JSON traces)
@@ -296,6 +303,10 @@ pub struct CtxPlayback {
     table: ResourceTable,
     wasi: WasiCtx,
     http: WasiHttpCtx,
+    http_hooks: PlaybackHttpHooks,
+}
+
+struct PlaybackHttpHooks {
     playback: Playback,
 }
 
@@ -305,12 +316,12 @@ impl CtxPlayback {
             table: ResourceTable::new(),
             wasi,
             http,
-            playback,
+            http_hooks: PlaybackHttpHooks { playback },
         }
     }
 
     pub fn into_playback(self) -> Playback {
-        self.playback
+        self.http_hooks.playback
     }
 }
 
@@ -324,19 +335,21 @@ impl WasiView for CtxPlayback {
 }
 
 impl WasiHttpView for CtxPlayback {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.http,
+            table: &mut self.table,
+            hooks: &mut self.http_hooks,
+        }
     }
+}
 
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
-    }
-
+impl WasiHttpHooks for PlaybackHttpHooks {
     fn send_request(
         &mut self,
-        request: hyper::Request<wasmtime_wasi_http::body::HyperOutgoingBody>,
+        request: hyper::Request<HyperOutgoingBody>,
         _config: OutgoingRequestConfig,
-    ) -> wasmtime_wasi_http::HttpResult<HostFutureIncomingResponse> {
+    ) -> HttpResult<HostFutureIncomingResponse> {
         let method = request.method().to_string();
         let url = request.uri().to_string();
         let actual_headers = sorted_headers(request.headers())?;
@@ -344,10 +357,10 @@ impl WasiHttpView for CtxPlayback {
         let (expected_request, recorded_response) = self
             .playback
             .next_http_response()
-            .map_err(HttpError::trap)?;
+            .map_err(|err| HttpError::trap(wasmtime::format_err!(err)))?;
 
         if method != expected_request.method || url != expected_request.url {
-            return Err(HttpError::trap(anyhow!(
+            return Err(HttpError::trap(wasmtime::format_err!(
                 "http request mismatch: expected {} {}, got {method} {url}",
                 expected_request.method,
                 expected_request.url
@@ -355,7 +368,7 @@ impl WasiHttpView for CtxPlayback {
         }
 
         if actual_headers != expected_request.headers {
-            return Err(HttpError::trap(anyhow!(
+            return Err(HttpError::trap(wasmtime::format_err!(
                 "http request headers mismatch for {method} {url}"
             )));
         }
@@ -367,10 +380,9 @@ impl WasiHttpView for CtxPlayback {
         } = recorded_response;
 
         let mut builder = hyper::Response::builder().status(status);
-        *builder
-            .headers_mut()
-            .ok_or_else(|| HttpError::trap(anyhow!("failed to access response headers")))? =
-            header_map_from_pairs(&headers)?;
+        *builder.headers_mut().ok_or_else(|| {
+            HttpError::trap(wasmtime::format_err!("failed to access response headers"))
+        })? = header_map_from_pairs(&headers)?;
 
         // Full<Bytes> is infallible, but we need to convert the error type to match the expected signature.
         // We use an explicit match on Infallible rather than Into::into because ErrorCode doesn't
@@ -392,45 +404,43 @@ impl WasiHttpView for CtxPlayback {
 }
 
 impl clocks::wall_clock::Host for CtxPlayback {
-    fn now(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        self.playback.next_now()
+    fn now(&mut self) -> wasmtime::Result<clocks::wall_clock::Datetime> {
+        self.http_hooks
+            .playback
+            .next_now()
+            .map_err(to_wasmtime_error)
     }
 
-    fn resolution(&mut self) -> std::result::Result<clocks::wall_clock::Datetime, anyhow::Error> {
-        self.playback.next_resolution()
+    fn resolution(&mut self) -> wasmtime::Result<clocks::wall_clock::Datetime> {
+        self.http_hooks
+            .playback
+            .next_resolution()
+            .map_err(to_wasmtime_error)
     }
 }
 
 impl clocks::monotonic_clock::Host for CtxPlayback {
-    fn now(&mut self) -> anyhow::Result<u64> {
-        self.playback.next_monotonic_now()
+    fn now(&mut self) -> wasmtime::Result<u64> {
+        self.http_hooks
+            .playback
+            .next_monotonic_now()
+            .map_err(to_wasmtime_error)
     }
 
-    fn resolution(&mut self) -> anyhow::Result<u64> {
-        self.playback.next_monotonic_resolution()
+    fn resolution(&mut self) -> wasmtime::Result<u64> {
+        self.http_hooks
+            .playback
+            .next_monotonic_resolution()
+            .map_err(to_wasmtime_error)
     }
 
-    fn subscribe_instant(
-        &mut self,
-        when: u64,
-    ) -> anyhow::Result<
-        wasmtime::component::Resource<
-            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
-        >,
-    > {
+    fn subscribe_instant(&mut self, when: u64) -> wasmtime::Result<Resource<DynPollable>> {
         // Delegate to underlying WasiClocks implementation
         use wasmtime_wasi::clocks::WasiClocksView;
         self.clocks().subscribe_instant(when)
     }
 
-    fn subscribe_duration(
-        &mut self,
-        duration: u64,
-    ) -> anyhow::Result<
-        wasmtime::component::Resource<
-            wasmtime_wasi::p2::bindings::clocks::monotonic_clock::Pollable,
-        >,
-    > {
+    fn subscribe_duration(&mut self, duration: u64) -> wasmtime::Result<Resource<DynPollable>> {
         // Delegate to underlying WasiClocks implementation
         use wasmtime_wasi::clocks::WasiClocksView;
         self.clocks().subscribe_duration(duration)
@@ -438,60 +448,85 @@ impl clocks::monotonic_clock::Host for CtxPlayback {
 }
 
 impl cli::environment::Host for CtxPlayback {
-    fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
-        self.playback.next_environment()
+    fn get_environment(&mut self) -> wasmtime::Result<Vec<(String, String)>> {
+        self.http_hooks
+            .playback
+            .next_environment()
+            .map_err(to_wasmtime_error)
     }
 
-    fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
-        self.playback.next_arguments()
+    fn get_arguments(&mut self) -> wasmtime::Result<Vec<String>> {
+        self.http_hooks
+            .playback
+            .next_arguments()
+            .map_err(to_wasmtime_error)
     }
 
-    fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
-        self.playback.next_initial_cwd()
+    fn initial_cwd(&mut self) -> wasmtime::Result<Option<String>> {
+        self.http_hooks
+            .playback
+            .next_initial_cwd()
+            .map_err(to_wasmtime_error)
     }
 }
 
 impl random::random::Host for CtxPlayback {
-    fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
-        self.playback.next_random_bytes(len)
+    fn get_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
+        self.http_hooks
+            .playback
+            .next_random_bytes(len)
+            .map_err(to_wasmtime_error)
     }
 
-    fn get_random_u64(&mut self) -> anyhow::Result<u64> {
-        self.playback.next_random_u64()
+    fn get_random_u64(&mut self) -> wasmtime::Result<u64> {
+        self.http_hooks
+            .playback
+            .next_random_u64()
+            .map_err(to_wasmtime_error)
     }
 }
 
 impl random::insecure::Host for CtxPlayback {
-    fn get_insecure_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
-        self.playback.next_insecure_random_bytes(len)
+    fn get_insecure_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
+        self.http_hooks
+            .playback
+            .next_insecure_random_bytes(len)
+            .map_err(to_wasmtime_error)
     }
 
-    fn get_insecure_random_u64(&mut self) -> anyhow::Result<u64> {
-        self.playback.next_insecure_random_u64()
+    fn get_insecure_random_u64(&mut self) -> wasmtime::Result<u64> {
+        self.http_hooks
+            .playback
+            .next_insecure_random_u64()
+            .map_err(to_wasmtime_error)
     }
 }
 
 impl random::insecure_seed::Host for CtxPlayback {
-    fn insecure_seed(&mut self) -> anyhow::Result<(u64, u64)> {
-        self.playback.next_insecure_seed()
+    fn insecure_seed(&mut self) -> wasmtime::Result<(u64, u64)> {
+        self.http_hooks
+            .playback
+            .next_insecure_seed()
+            .map_err(to_wasmtime_error)
     }
 }
 
 impl streams::Host for CtxPlayback {
-    fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
+    fn convert_stream_error(&mut self, err: StreamError) -> wasmtime::Result<streams::StreamError> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::Host>::convert_stream_error(view.table, err)
     }
 }
 
 impl streams::HostInputStream for CtxPlayback {
-    fn drop(&mut self, stream: Resource<streams::InputStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<streams::InputStream>) -> wasmtime::Result<()> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostInputStream>::drop(view.table, stream)
     }
 
     fn read(&mut self, stream: Resource<streams::InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-        self.playback
+        self.http_hooks
+            .playback
             .expect_read_event()
             .map_err(|err| StreamError::trap(&err.to_string()))?;
         let view = WasiView::ctx(self);
@@ -503,7 +538,8 @@ impl streams::HostInputStream for CtxPlayback {
         stream: Resource<streams::InputStream>,
         len: u64,
     ) -> StreamResult<Vec<u8>> {
-        self.playback
+        self.http_hooks
+            .playback
             .expect_read_event()
             .map_err(|err| StreamError::trap(&err.to_string()))?;
         let view = WasiView::ctx(self);
@@ -527,14 +563,14 @@ impl streams::HostInputStream for CtxPlayback {
     fn subscribe(
         &mut self,
         stream: Resource<streams::InputStream>,
-    ) -> anyhow::Result<Resource<poll::Pollable>> {
+    ) -> wasmtime::Result<Resource<poll::Pollable>> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostInputStream>::subscribe(view.table, stream)
     }
 }
 
 impl streams::HostOutputStream for CtxPlayback {
-    fn drop(&mut self, stream: Resource<streams::OutputStream>) -> anyhow::Result<()> {
+    fn drop(&mut self, stream: Resource<streams::OutputStream>) -> wasmtime::Result<()> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostOutputStream>::drop(view.table, stream)
     }
@@ -578,7 +614,7 @@ impl streams::HostOutputStream for CtxPlayback {
     fn subscribe(
         &mut self,
         stream: Resource<streams::OutputStream>,
-    ) -> anyhow::Result<Resource<poll::Pollable>> {
+    ) -> wasmtime::Result<Resource<poll::Pollable>> {
         let view = WasiView::ctx(self);
         <ResourceTable as streams::HostOutputStream>::subscribe(view.table, stream)
     }
@@ -627,14 +663,14 @@ impl filesystem::types::Host for CtxPlayback {
     fn convert_error_code(
         &mut self,
         err: wasmtime_wasi::p2::FsError,
-    ) -> anyhow::Result<filesystem::types::ErrorCode> {
+    ) -> wasmtime::Result<filesystem::types::ErrorCode> {
         self.filesystem().convert_error_code(err)
     }
 
     fn filesystem_error_code(
         &mut self,
         err: Resource<streams::Error>,
-    ) -> anyhow::Result<Option<filesystem::types::ErrorCode>> {
+    ) -> wasmtime::Result<Option<filesystem::types::ErrorCode>> {
         self.filesystem().filesystem_error_code(err)
     }
 }
@@ -691,7 +727,10 @@ impl filesystem::types::HostDescriptor for CtxPlayback {
         len: filesystem::types::Filesize,
         offset: filesystem::types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
-        self.playback.expect_read_event().map_err(FsError::trap)?;
+        self.http_hooks
+            .playback
+            .expect_read_event()
+            .map_err(|err| FsError::trap(wasmtime::format_err!(err)))?;
         self.filesystem().read(fd, len, offset)
     }
 
@@ -775,7 +814,7 @@ impl filesystem::types::HostDescriptor for CtxPlayback {
             .open_at(fd, path_flags, path, open_flags, descriptor_flags)
     }
 
-    fn drop(&mut self, fd: Resource<filesystem::types::Descriptor>) -> anyhow::Result<()> {
+    fn drop(&mut self, fd: Resource<filesystem::types::Descriptor>) -> wasmtime::Result<()> {
         let mut fs = self.filesystem();
         filesystem::types::HostDescriptor::drop(&mut fs, fd)
     }
@@ -850,7 +889,7 @@ impl filesystem::types::HostDescriptor for CtxPlayback {
         &mut self,
         a: Resource<filesystem::types::Descriptor>,
         b: Resource<filesystem::types::Descriptor>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         self.filesystem().is_same_object(a, b)
     }
 
@@ -882,7 +921,7 @@ impl filesystem::types::HostDirectoryEntryStream for CtxPlayback {
     fn drop(
         &mut self,
         stream: Resource<filesystem::types::DirectoryEntryStream>,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         let mut fs = self.filesystem();
         filesystem::types::HostDirectoryEntryStream::drop(&mut fs, stream)
     }
