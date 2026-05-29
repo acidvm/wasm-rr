@@ -1,20 +1,3 @@
-{
-  "events": [
-    {
-      "call": "arguments",
-      "args": [
-        "print_args.wasm",
-        "hello",
-        "world"
-      ]
-    },
-    {
-      "call": "arguments",
-      "args": [
-        "print_args.wasm",
-        "hello",
-        "world"
-      ]
-    }
-  ]
-}
+{"events":[
+{"call":"arguments","args":["print_args.wasm","hello","world"]}
+]}

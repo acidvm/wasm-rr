@@ -28,7 +28,7 @@ mod trace;
 mod util;
 mod wasi;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use trace::{convert, TraceFormat};
@@ -36,7 +36,7 @@ use wasmtime::component::Component;
 use wasmtime::Store;
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem, sync::io::streams};
 use wasmtime_wasi::WasiView;
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{p2::WasiHttpView, WasiHttpCtx};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, propagate_version = true)]
@@ -123,7 +123,7 @@ fn record(wasm: &Path, trace: &Path, format: TraceFormat, args: &[String]) -> Re
         http,
         recorder::Recorder::new(trace.to_path_buf(), format),
     );
-    let ctx = run_wasm_with_wasi(wasm, ctx)?;
+    let ctx = run_wasm_with_wasi(wasm, ctx).map_err(|err| anyhow::anyhow!("{err}"))?;
     ctx.into_recorder().save()
 }
 
@@ -133,11 +133,11 @@ fn replay(wasm: &Path, trace: &Path, format: TraceFormat) -> Result<()> {
     let wasi = engine::build_wasi_ctx(wasm, &[]);
     let http = WasiHttpCtx::new();
     let ctx = playback::CtxPlayback::new(wasi, http, playback);
-    let ctx = run_wasm_with_wasi(wasm, ctx)?;
+    let ctx = run_wasm_with_wasi(wasm, ctx).map_err(|err| anyhow::anyhow!("{err}"))?;
     ctx.into_playback().finish()
 }
 
-fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> Result<T>
+fn run_wasm_with_wasi<P, T>(wasm_path: P, ctx: T) -> wasmtime::Result<T>
 where
     P: AsRef<Path>,
     T: WasiView
@@ -163,37 +163,41 @@ where
     let mut store = Store::new(&engine, ctx);
 
     // Compile and instantiate the component.
-    let component = Component::from_file(&engine, wasm_path)
-        .with_context(|| format!("failed to read/compile component: {}", wasm_path.display()))?;
+    let component = Component::from_file(&engine, wasm_path).map_err(|err| {
+        err.context(format!(
+            "failed to read/compile component: {}",
+            wasm_path.display()
+        ))
+    })?;
 
     let instance = linker
         .instantiate(&mut store, &component)
-        .context("failed to instantiate component")?;
+        .map_err(|err| err.context("failed to instantiate component"))?;
 
     // Get the index for the exported interface
     let interface_idx = instance
         .get_export_index(&mut store, None, "wasi:cli/run@0.2.0")
-        .context("Cannot get `wasi:cli/run@0.2.0` interface")?;
+        .ok_or_else(|| wasmtime::format_err!("Cannot get `wasi:cli/run@0.2.0` interface"))?;
     // Get the index for the exported function in the exported interface
     let parent_export_idx = Some(&interface_idx);
     let func_idx = instance
         .get_export_index(&mut store, parent_export_idx, "run")
-        .context("Cannot get `run` function in `wasi:cli/run@0.2.0` interface")?;
-    let func = instance
-        .get_func(&mut store, func_idx)
-        .context("Cannot get `run` function handle in `wasi:cli/run@0.2.0`")?;
+        .ok_or_else(|| {
+            wasmtime::format_err!("Cannot get `run` function in `wasi:cli/run@0.2.0` interface")
+        })?;
+    let func = instance.get_func(&mut store, func_idx).ok_or_else(|| {
+        wasmtime::format_err!("Cannot get `run` function handle in `wasi:cli/run@0.2.0`")
+    })?;
     // As the `run` function in `wasi:cli/run@0.2.0` takes no argument and return a WASI result that correspond to a `Result<(), ()>`
     // Reference:
     // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
     // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
-    let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
+    let typed = func.typed::<(), (std::result::Result<(), ()>,)>(&store)?;
 
     // Try to call the function, but handle the case where it exits
     match typed.call(&mut store, ()) {
         Ok((result,)) => {
-            // Required, see documentation of TypedFunc::call
-            typed.post_return(&mut store)?;
-            result.map_err(|_| anyhow::anyhow!("error"))?;
+            result.map_err(|_| wasmtime::format_err!("error"))?;
         }
         Err(e) => {
             // Check if this is an exit error using proper downcasting

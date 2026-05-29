@@ -1,11 +1,10 @@
-use anyhow::{Context, Result};
 use std::marker::PhantomData;
 use std::path::Path;
 use wasmtime::component::{HasData, Linker};
 use wasmtime::{Config, Engine};
 use wasmtime_wasi::p2::bindings::{cli, clocks, random, sync::filesystem, sync::io::streams};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_http::WasiHttpView;
+use wasmtime_wasi_http::p2::{add_only_http_to_linker_sync, WasiHttpView};
 
 struct Intercept<T>(PhantomData<T>);
 
@@ -21,7 +20,7 @@ impl<T: 'static> HasData for Intercept<T> {
 /// # Errors
 ///
 /// Returns an error if engine or linker configuration fails
-pub fn configure_engine_and_linker<T>() -> Result<(Engine, Linker<T>)>
+pub fn configure_engine_and_linker<T>() -> wasmtime::Result<(Engine, Linker<T>)>
 where
     T: WasiView
         + WasiHttpView
@@ -42,12 +41,13 @@ where
     // Create an engine with the component model enabled and a component linker.
     let mut config = Config::new();
     config.wasm_component_model(true);
-    let engine = Engine::new(&config).context("failed to create engine with component model")?;
+    let engine = Engine::new(&config)
+        .map_err(|err| err.context("failed to create engine with component model"))?;
     let mut linker: Linker<T> = Linker::new(&engine);
 
     // Add HTTP components first
-    wasmtime_wasi_http::add_only_http_to_linker_sync(&mut linker)
-        .context("failed to add wasi:http components")?;
+    add_only_http_to_linker_sync(&mut linker)
+        .map_err(|err| err.context("failed to add wasi:http components"))?;
 
     // Add I/O components needed by both WASI and HTTP
     add_wasi_io_to_linker(&mut linker)?;
@@ -69,7 +69,7 @@ where
     Ok((engine, linker))
 }
 
-fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
+fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> wasmtime::Result<()> {
     use wasmtime::component::ResourceTable;
     use wasmtime_wasi::p2::bindings;
 
@@ -86,7 +86,9 @@ fn add_wasi_io_to_linker<T: WasiView>(linker: &mut Linker<T>) -> Result<()> {
     Ok(())
 }
 
-fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(linker: &mut Linker<T>) -> Result<()> {
+fn add_remaining_wasi_to_linker<T: WasiView + WasiHttpView>(
+    linker: &mut Linker<T>,
+) -> wasmtime::Result<()> {
     use wasmtime_wasi::cli::{WasiCli, WasiCliView};
     use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemView};
     use wasmtime_wasi::p2::bindings;
