@@ -63,7 +63,7 @@ jobs:
       - name: Deploy to GitHub Pages (main branch)
         # Deploy to gh-pages branch when pushing to main and docs changed
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.docs-changed.outputs.changed == 'true'
-        uses: peaceiris/actions-gh-pages@v4.0.0
+        uses: peaceiris/actions-gh-pages@v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs-output
